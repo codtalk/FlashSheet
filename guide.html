@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlashSheet — Hướng dẫn</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231c1f44'/%3E%3Cpath d='M10 42h44' stroke='%2306b6d4' stroke-width='6' stroke-linecap='round'/%3E%3Ctext x='14' y='40' font-family='Inter, Arial' font-size='20' fill='%23a78bfa' font-weight='800'%3EF%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+  <style>
+    .guide { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+    .guide h1 { margin: 8px 0 12px; }
+    .card.guide-card { margin-top: 10px; }
+    .guide a { color: var(--primary-2); text-decoration: none; }
+    .guide a:hover { color: #fff; }
+    .kbd{ display:inline-block; padding:0 6px; border:1px solid rgba(255,255,255,.2); border-bottom-width:2px; border-radius:6px; font-size:12px; line-height:1.6 }
+    .step{ margin: 8px 0; }
+    .hint{ color: var(--muted); }
+    ul.tight li{ margin: 6px 0; }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="index.html" aria-label="Trang chủ">FlashSheet</a>
+    <nav class="nav">
+      <a href="index.html" class="nav-btn">Học từ vựng</a>
+      <a href="admin.html" class="nav-btn">Nhập dữ liệu</a>
+      <a href="guide.html" class="nav-btn secondary" aria-current="page">Hướng dẫn</a>
+    </nav>
+  </header>
+
+  <main class="guide">
+    <div class="card guide-card">
+      <h1>Hướng dẫn sử dụng</h1>
+      <p>
+        FlashSheet là ứng dụng học từ vựng bằng flashcard. Mặc định dữ liệu lưu trong trình duyệt. 
+        Bạn có thể cấu hình Google Sheet để đồng bộ 2 chiều (không xoá dữ liệu).
+      </p>
+      <h3>1) Nhập dữ liệu</h3>
+      <ul class="tight">
+        <li>Mở trang <a href="admin.html">Nhập dữ liệu</a>.</li>
+        <li>Điền <b>Từ vựng</b> và thêm <b>Mô tả/Định nghĩa</b> (có thể nhiều dòng).</li>
+        <li>Bấm <b>Lưu vào trình duyệt</b> để lưu Local Storage.</li>
+      </ul>
+
+      <h3>2) Cấu hình đọc từ Google Sheet</h3>
+      <ul class="tight">
+        <li>Trong Google Sheets: File → Share → Publish to web → chọn <b>sheet</b> cụ thể → định dạng <b>CSV</b>.</li>
+        <li>Copy URL (dạng <code>...&output=csv</code>), dán vào ô <b>CSV URL</b> ở trang Nhập dữ liệu.</li>
+        <li>(Tuỳ chọn) Bật <b>Tự động tải từ Sheet khi mở trang học</b> và đặt <b>Khoảng làm mới</b>.</li>
+      </ul>
+
+      <h3>3) Cấu hình ghi lên Google Sheet</h3>
+      <ul class="tight">
+        <li>Extensions → Apps Script → dán mã <b>doPost</b> trong README của dự án (hỗ trợ form-urlencoded).</li>
+        <li>Deploy: Web app → Execute as: <b>Me</b> → Who has access: <b>Anyone</b> → Deploy → copy <b>Web app URL</b>.</li>
+        <li>Dán URL vào ô <b>Apps Script Write URL</b> trong trang Nhập dữ liệu.</li>
+      </ul>
+
+      <h3>4) Đồng bộ 2 chiều (không xoá dữ liệu)</h3>
+      <ul class="tight">
+        <li>Bấm <b>Đồng bộ (Sheet ↔ Local)</b> trong trang Nhập dữ liệu.</li>
+        <li>Ứng dụng sẽ: tải dữ liệu từ Sheet về và <b>hợp nhất</b> với Local; sau đó đẩy các <b>mục mới</b> từ Local lên Sheet bằng <b>append</b>.</li>
+        <li>Không xoá dữ liệu ở hai phía. Định nghĩa bị trùng sẽ được loại bỏ.</li>
+      </ul>
+
+      <h3>5) Học từ vựng</h3>
+      <ul class="tight">
+        <li>Mở trang <a href="index.html">Học từ vựng</a>.</li>
+        <li>Chọn chế độ: Nhập đáp án, Trắc nghiệm, hoặc Trộn.</li>
+        <li>Bấm <b>Tải từ Sheet</b> nếu muốn nạp ngay dữ liệu mới nhất.</li>
+      </ul>
+
+      <p class="hint">Mẹo: Trên thiết bị mới, chỉ cần dán lại CSV URL và Web App URL để tiếp tục đồng bộ.</p>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <span>FlashSheet — học nhanh, nhớ lâu.</span>
+  </footer>
+</body>
+</html>

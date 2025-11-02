@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nhập Dữ Liệu - LearnEnglish</title>
+  <title>FlashSheet — Nhập dữ liệu</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -12,9 +12,11 @@
 </head>
 <body>
   <header class="app-header">
-    <div class="brand">LearnEnglish</div>
-    <nav>
-      <a href="index.html" class="link">Học từ vựng</a>
+    <a class="brand" href="index.html" aria-label="Trang chủ">FlashSheet</a>
+    <nav class="nav">
+      <a href="index.html" class="nav-btn">Học từ vựng</a>
+      <a href="admin.html" class="nav-btn" aria-current="page">Nhập dữ liệu</a>
+      <a href="guide.html" class="nav-btn secondary">Hướng dẫn</a>
     </nav>
   </header>
 
@@ -24,7 +26,7 @@
     <form id="wordForm" class="data-form">
       <div class="form-row">
         <label for="wordInput">Từ vựng</label>
-        <input type="text" id="wordInput" placeholder="Nhập từ (ví dụ: apple)" required />
+  <input type="text" id="wordInput" class="answer-input word-input" placeholder="Nhập từ (ví dụ: apple)" required />
       </div>
 
       <div class="form-row">

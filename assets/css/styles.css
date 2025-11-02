@@ -28,9 +28,13 @@ body{
   background:rgba(15,18,38,0.6); border-bottom:1px solid rgba(255,255,255,0.06);
 }
 .app-footer{ border-top:1px solid rgba(255,255,255,0.06); border-bottom:none;}
-.brand{font-weight:800; letter-spacing:0.5px}
-.link{color:var(--primary-2); text-decoration:none}
-.link:hover{color:white}
+.brand{font-weight:800; letter-spacing:0.5px; color:#fff; text-decoration:none}
+.nav{display:flex; gap:8px; align-items:center}
+.nav-btn{display:inline-block; padding:10px 14px; border-radius:999px; background:linear-gradient(135deg, rgba(124,58,237,0.25), rgba(6,182,212,0.25)); color:#fff; text-decoration:none; border:1px solid rgba(255,255,255,0.18); transition:transform .12s, filter .2s, box-shadow .2s}
+.nav-btn:hover{transform:translateY(-1px); filter:brightness(1.05)}
+.nav-btn:focus-visible{outline:none; box-shadow:0 0 0 3px rgba(6,182,212,0.35)}
+.nav-btn.secondary{background:transparent}
+.nav-btn[aria-current="page"]{background:linear-gradient(135deg, #7c3aed, #06b6d4); border-color:transparent}
 
 .container{max-width:980px; margin:24px auto; padding:0 16px}
 .container.narrow{max-width:740px}
@@ -54,7 +58,13 @@ body{
 .q-index{color:var(--muted)}
 .question-text{font-size:22px; line-height:1.5; margin:12px 0 16px}
 .answer-area{display:grid; gap:10px}
-.answer-input{width:100%; padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); background:#141738; color:var(--text)}
+.answer-input{width:100%; padding:12px 14px; border-radius:14px; border:1px solid rgba(255,255,255,0.12); background:#101431; color:var(--text); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04)}
+.answer-input::placeholder{color:#8a93a5}
+.answer-input:focus{outline:none; border-color:rgba(124,58,237,0.6); box-shadow:0 0 0 3px rgba(124,58,237,0.25)}
+.word-input{padding-left:44px; position:relative; background:
+  linear-gradient(90deg, rgba(124,58,237,0.35) 0 6px, transparent 6px) no-repeat,
+  #101431; border-radius:14px}
+.def-item .btn.secondary{min-width:42px}
 .choice{display:block; width:100%; text-align:left; padding:12px 14px; border-radius:12px; background:#141738; border:1px solid rgba(255,255,255,0.08); cursor:pointer; color:var(--text); transition:background .15s}
 .choice:hover{background:#1a1e45}
 .choice.correct{border-color:rgba(34,197,94,0.8); box-shadow:0 0 0 2px rgba(34,197,94,0.25) inset}
