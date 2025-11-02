@@ -17,6 +17,7 @@
   const sheetRefreshSecEl = document.getElementById('sheetRefreshSec');
   const btnSheetLoad = document.getElementById('btnSheetLoad');
   const btnSheetSaveCfg = document.getElementById('btnSheetSaveCfg');
+  const btnUseThienPreset = document.getElementById('btnUseThienPreset');
 
   let dataset = [];
   let sheetCfg = LE.loadSheetConfig() || {};
@@ -224,6 +225,32 @@
   loadSheetForm();
 
   // Sheet handlers
+  btnUseThienPreset?.addEventListener('click', async () => {
+    const csv = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuYF-fncf9PSBfkDPMAv_q4LiYColRiVIpUniAUKuQFLPXqXhMgkYsTmoDr-BCv5aqaqNRAnYx7_TC/pub?gid=0&single=true&output=csv';
+    const write = 'https://script.google.com/macros/s/AKfycbyB81ZUsePXtxhDBsfbE2QB1XGVOQ9plTdr9W3AAMC_4uB52Uj2P8DNhhWZXzrp2P1JHQ/exec';
+    if (sheetCsvUrlEl) sheetCsvUrlEl.value = csv;
+    if (sheetWriteUrlEl) sheetWriteUrlEl.value = write;
+    sheetCfg = {
+      csvUrl: csv,
+      writeUrl: write,
+      autoOnLearn: !!sheetAutoOnLearnEl?.checked,
+      refreshSec: Math.max(15, parseInt(sheetRefreshSecEl?.value, 10) || 120),
+    };
+    LE.saveSheetConfig(sheetCfg);
+    showToast('Đã chọn bộ từ của thienpahm và lưu cấu hình', 'success');
+    // Tải dữ liệu về Local Storage ngay
+    try{
+      const data = await LE.fetchSheetCSV(csv);
+      dataset = data;
+      LE.saveDatasetToLocal(dataset);
+      await refreshDatasetSummary();
+      showToast('Đã tải bộ từ về Local Storage', 'success');
+    }catch(err){
+      console.warn('Preset load failed:', err);
+      showToast('Không thể tải bộ từ từ Sheet', 'error');
+    }
+  });
+
   btnSheetSaveCfg?.addEventListener('click', () => {
     sheetCfg = {
       csvUrl: sheetCsvUrlEl.value.trim(),

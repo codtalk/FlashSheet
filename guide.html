@@ -54,10 +54,67 @@
 
       <h3>3) Cấu hình ghi lên Google Sheet</h3>
       <ul class="tight">
-        <li>Extensions → Apps Script → dán mã <b>doPost</b> trong README của dự án (hỗ trợ form-urlencoded).</li>
+        <li>Extensions → Apps Script → dán mã <b>doPost</b> dưới đây (hỗ trợ <code>application/x-www-form-urlencoded</code>).</li>
         <li>Deploy: Web app → Execute as: <b>Me</b> → Who has access: <b>Anyone</b> → Deploy → copy <b>Web app URL</b>.</li>
         <li>Dán URL vào ô <b>Apps Script Write URL</b> trong trang Nhập dữ liệu.</li>
       </ul>
+
+      <div class="card guide-card" style="padding:12px 14px">
+        <h4 style="margin:4px 0 8px">Mã doPost (copy/paste vào Apps Script)</h4>
+        <pre style="white-space:pre-wrap; word-break:break-word; background:rgba(255,255,255,.04); padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,.1)"><code>// Web App endpoint: nhận POST từ FlashSheet và append vào Sheet
+function doPost(e) {
+  try {
+    // Đặt tên sheet cần ghi (đổi cho phù hợp)
+    var SHEET_NAME = 'Sheet1';
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+
+    // Với content-type: application/x-www-form-urlencoded
+    // FlashSheet gửi field 'rows' là JSON string của mảng các dòng
+    var rowsParam = e && e.parameter && e.parameter.rows ? e.parameter.rows : null;
+    if (!rowsParam) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: 'Missing rows param' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var rows = JSON.parse(rowsParam);
+    if (!Array.isArray(rows)) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: 'rows must be array' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Chuẩn hoá dữ liệu: [timestamp, word, definition]
+    var now = new Date();
+    var values = rows.map(function(r) {
+      var word = (r.word !== undefined ? r.word : (Array.isArray(r) ? r[0] : '')) || '';
+      var def  = (r.definition !== undefined ? r.definition : (Array.isArray(r) ? r[1] : '')) || '';
+      return [now, word, def];
+    });
+
+    // Thêm header nếu sheet còn trống
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow(['timestamp', 'word', 'definition']);
+    }
+
+    // Ghi các dòng mới
+    sheet.getRange(sheet.getLastRow() + 1, 1, values.length, 3).setValues(values);
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: true, appended: values.length }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: String(err) }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// Gợi ý: Đảm bảo triển khai Web app với Execute as: Me, Who has access: Anyone.
+// Sau mỗi lần chỉnh sửa mã, cần triển khai phiên bản mới (xem mục "Cập nhật & reset" bên dưới).
+</code></pre>
+      </div>
 
       <h3>4) Đồng bộ 2 chiều (không xoá dữ liệu)</h3>
       <ul class="tight">
@@ -74,6 +131,16 @@
       </ul>
 
       <p class="hint">Mẹo: Trên thiết bị mới, chỉ cần dán lại CSV URL và Web App URL để tiếp tục đồng bộ.</p>
+    </div>
+
+    <div class="card guide-card">
+      <h3>6) Cập nhật & reset khi có thay đổi</h3>
+      <ul class="tight">
+        <li><b>Apps Script (Web app)</b>: Sau khi sửa mã, vào <i>Deploy → Manage deployments</i> → chọn deployment của Web app → <i>Edit</i> → ở phần Version chọn <i>New version</i> → <i>Save</i> → <i>Deploy</i>. Nếu vẫn thấy chạy mã cũ, kiểm tra bạn đang chỉnh đúng project và đúng deployment.</li>
+        <li><b>Google Sheets CSV (Publish to web)</b>: Bản CSV công khai có thể trễ 1–5 phút. Có thể <i>Unpublish</i> rồi <i>Publish</i> lại. Trong ứng dụng, bạn cũng có thể thêm tham số ngẫu nhiên vào URL (ví dụ: <code>&cachebust=1699999999999</code>) để “bẻ cache” trên trình duyệt.</li>
+        <li><b>GitHub Pages / Trình duyệt</b>: Thử <span class="kbd">Cmd</span>+<span class="kbd">Shift</span>+<span class="kbd">R</span> để hard refresh hoặc mở cửa sổ ẩn danh. Nếu cần, cập nhật query <code>?v=timestamp</code> cho tệp CSS/JS khi bạn publish phiên bản mới.</li>
+        <li><b>Local Storage</b>: Nếu dữ liệu cũ vẫn hiển thị, xoá các khoá <code>fs_dataset</code> và <code>fs_sheet_config</code> trong DevTools → Application → Local Storage, hoặc nhập lại từ Sheet rồi bấm Đồng bộ.</li>
+      </ul>
     </div>
   </main>
 
