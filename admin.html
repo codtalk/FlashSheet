@@ -53,7 +53,7 @@
 
     
 
-    <section class="io-panel">
+    <section class="io-panel" id="sheet-config">
       <h2>Đồng bộ Google Sheet</h2>
       <p class="hint">Để đọc tự động, hãy Publish sheet thành CSV (File → Share → Publish to web) và dán URL CSV. Để ghi tự động, triển khai Apps Script nhận POST (mẫu có trong README) rồi dán URL web app ở dưới.</p>
       <div class="form-row">
@@ -80,11 +80,17 @@
       </div>
     </section>
 
-    <!-- Move the dataset box to the very bottom and make it scrollable -->
+    <!-- Move the dataset box to the very bottom, collapsible by default -->
     <section class="dataset-list">
-      <h2>Bộ từ hiện có</h2>
-      <div id="datasetInfo" class="dataset-info">Đang tải…</div>
-      <ul id="datasetList" class="list"></ul>
+      <details id="datasetCollapse">
+        <summary class="collapsible-header">
+          <span>Bộ từ hiện có</span>
+          <span id="datasetCount" class="muted-count">— 0 từ</span>
+          <span class="chev" aria-hidden="true">▾</span>
+        </summary>
+        <div id="datasetInfo" class="dataset-info">Đang tải…</div>
+        <ul id="datasetList" class="list"></ul>
+      </details>
     </section>
   </main>
 

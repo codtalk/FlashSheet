@@ -16,6 +16,9 @@
   const btnSendFeedback = document.getElementById('btnSendFeedback');
   const feedbackText = document.getElementById('feedbackText');
   const feedbackUser = document.getElementById('feedbackUser');
+  const sheetModal = document.getElementById('sheetModal');
+  const btnGoSheetCfg = document.getElementById('btnGoSheetCfg');
+  const btnModalClose = document.getElementById('btnModalClose');
 
   let dataset = [];
   let queue = []; // array of indices
@@ -30,6 +33,7 @@
   const FEEDBACK_BUF_KEY = 'fs_feedback_buffer';
   const FEEDBACK_USER_KEY = 'fs_feedback_user';
   let lastDef = '';
+  const SHEET_PROMPT_KEY = 'fs_sheet_prompt_date';
 
   function loadProgress(){
     try{ progress = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}') || {}; }
@@ -287,7 +291,7 @@
         try{ localStorage.setItem(FEEDBACK_USER_KEY, (feedbackUser.value||'').trim()); }catch{}
       });
     }catch{}
-    // Always prefer Local Storage; if empty, bootstrap from vocab.json into Local
+  // Always prefer Local Storage; if empty, bootstrap from vocab.json into Local
     dataset = await LE.loadDataset();
     if (!Array.isArray(dataset) || dataset.length === 0) {
       const fileData = await LE.loadDatasetFromFile();
@@ -309,6 +313,41 @@
     // No auto-refresh from Sheet; use the reload button to refresh from file
     // attempt to flush any pending feedback if write URL is available
     flushFeedbackBuffer();
+
+    // Daily prompt to set up Google Sheet (Write URL) if missing
+    try{
+      const cfg = (LE.loadSheetConfig && LE.loadSheetConfig()) || {};
+      const writeMissing = !cfg.writeUrl;
+      if (writeMissing) {
+        const today = new Date();
+        const dayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`; // local YYYY-MM-DD
+        const last = localStorage.getItem(SHEET_PROMPT_KEY) || '';
+        if (last !== dayKey) {
+          // show modal
+          if (sheetModal) { sheetModal.style.display = 'block'; sheetModal.setAttribute('aria-hidden','false'); }
+          localStorage.setItem(SHEET_PROMPT_KEY, dayKey);
+        }
+      }
+    }catch{}
+
+    btnGoSheetCfg?.addEventListener('click', () => {
+      // Navigate and focus the sheet config section
+      window.location.href = 'admin.html#sheet-config';
+    });
+
+    btnModalClose?.addEventListener('click', () => {
+      if (sheetModal) { sheetModal.style.display = 'none'; sheetModal.setAttribute('aria-hidden','true'); }
+    });
+    sheetModal?.addEventListener('click', (e) => {
+      if (e.target && e.target.getAttribute('data-close') === 'true') {
+        if (sheetModal) { sheetModal.style.display = 'none'; sheetModal.setAttribute('aria-hidden','true'); }
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && sheetModal && sheetModal.style.display !== 'none') {
+        sheetModal.style.display = 'none'; sheetModal.setAttribute('aria-hidden','true');
+      }
+    });
   }
 
   init();

@@ -62,6 +62,8 @@
     // Show current Local Storage dataset so user sees pulled Sheet data
     dataset = await LE.loadDataset();
     datasetInfo.textContent = `${dataset.length} từ vựng`;
+    const datasetCount = document.getElementById('datasetCount');
+    if (datasetCount) datasetCount.textContent = `— ${dataset.length} từ`;
     datasetList.innerHTML = '';
     dataset.forEach((item, idx) => {
       const li = document.createElement('li');
@@ -308,4 +310,15 @@
       showToast('Gửi lên Sheet thất bại', 'error');
     }
   }
+
+  // If navigated with #sheet-config, scroll to that section and focus first input
+  window.addEventListener('load', () => {
+    if (location.hash === '#sheet-config') {
+      const section = document.getElementById('sheet-config');
+      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => {
+        document.getElementById('sheetCsvUrl')?.focus();
+      }, 300);
+    }
+  });
 })();

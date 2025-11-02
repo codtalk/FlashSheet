@@ -94,6 +94,9 @@ textarea.answer-input{min-height:96px; resize:vertical; line-height:1.4}
 .io-panel{margin-top:18px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:12px; border-radius:12px}
 .io-actions{display:flex; gap:8px; flex-wrap:wrap}
 .hint{color:var(--muted)}
+/* Notice styles */
+.io-panel.notice{border-color:rgba(6,182,212,0.35); background:rgba(6,182,212,0.08)}
+.io-panel.notice.warn{border-color:rgba(234,179,8,0.45); background:rgba(234,179,8,0.08)}
 .list{list-style:none; padding-left:0}
 .list li{padding:8px 0; border-bottom:1px dashed rgba(255,255,255,0.08)}
 
@@ -108,6 +111,17 @@ textarea.answer-input{min-height:96px; resize:vertical; line-height:1.4}
 .dataset-list .list::-webkit-scrollbar{width:8px}
 .dataset-list .list::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15); border-radius:8px}
 .dataset-list .list::-webkit-scrollbar-track{background:transparent}
+
+/* Collapsible summary */
+.dataset-list details{background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); border-radius:12px}
+.dataset-list summary{list-style:none; cursor:pointer; padding:12px 14px; display:flex; align-items:center; gap:10px}
+.dataset-list summary::-webkit-details-marker{display:none}
+.dataset-list .collapsible-header{justify-content:space-between}
+.dataset-list .muted-count{color:var(--muted); font-size:14px}
+.dataset-list .chev{transition:transform .15s ease}
+.dataset-list details[open] .chev{transform:rotate(180deg)}
+.dataset-list #datasetInfo{padding:10px 14px; color:var(--muted)}
+.dataset-list .list{margin:0 0 8px}
 
 /* Confetti canvas */
 .confetti-canvas{position:absolute; inset:0; pointer-events:none}
@@ -146,3 +160,10 @@ textarea.answer-input{min-height:96px; resize:vertical; line-height:1.4}
 .toast.show{opacity:1; transform:translateX(-50%) translateY(-4px)}
 .toast.success{border-color:rgba(34,197,94,0.6)}
 .toast.error{border-color:rgba(239,68,68,0.6)}
+
+/* Modal */
+.modal{position:fixed; inset:0; z-index:1000}
+.modal[aria-hidden="true"]{display:none}
+.modal-backdrop{position:absolute; inset:0; background:rgba(0,0,0,0.5); backdrop-filter:blur(2px)}
+.modal-dialog{position:relative; z-index:1; max-width:560px; margin:10vh auto; background:var(--card); border-radius:16px; padding:18px; border:1px solid rgba(255,255,255,0.08); box-shadow:0 30px 80px rgba(0,0,0,0.45)}
+.modal-dialog h2{margin-top:0}

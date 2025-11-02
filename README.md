@@ -152,3 +152,6 @@ Nếu trả 200/ok thì Web App nhận tốt.
 ## Ghi chú
 - Nút "Lưu vào thư mục data" dùng File System Access API (Chrome/Edge). Safari hiện chưa hỗ trợ.
 - Nếu bạn muốn dùng Excel, hãy xuất ra CSV rồi dùng công cụ chuyển thành JSON theo định dạng trên.
+
+Tính năng bổ xung sau:
+- Tích hợp ai đọc từ; cụm;
