@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Học Tiếng Anh - Flashcards</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231c1f44'/%3E%3Cpath d='M12 46c6-1 10-5 12-12 1-4 1-8 6-12 6-5 14-5 22-1' fill='none' stroke='%237c3aed' stroke-width='6' stroke-linecap='round'/%3E%3Ctext x='16' y='42' font-family='Inter, Arial' font-size='20' fill='%23e9d5ff' font-weight='800'%3EL%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">LearnEnglish</div>
+    <nav>
+      <a href="admin.html" class="link">Nhập dữ liệu</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="controls">
+      <div class="mode">
+        <label for="modeSelect">Chế độ:</label>
+        <select id="modeSelect">
+          <option value="text">Nhập đáp án</option>
+          <option value="mc">Chọn đáp án</option>
+          <option value="mixed" selected>Trộn (ngẫu nhiên)</option>
+        </select>
+      </div>
+      <div class="actions">
+        <button id="btnShuffle" class="btn">Trộn câu hỏi</button>
+        <button id="btnSheetReload" class="btn secondary" title="Tải mới từ Google Sheet (nếu cấu hình)">Tải từ Sheet</button>
+        <label class="btn secondary" for="importFile">
+          Nhập JSON/CSV
+          <input type="file" id="importFile" accept="application/json,.json,text/csv,.csv" hidden />
+        </label>
+      </div>
+    </section>
+
+    <section class="flashcard" id="flashcard">
+      <div class="card" id="card">
+        <div class="card-header">
+          <span class="badge">Định nghĩa</span>
+          <div id="qIndex" class="q-index">0/0</div>
+        </div>
+        <div id="questionText" class="question-text">Đang tải dữ liệu…</div>
+        <div class="answer-area" id="answerArea">
+          <!-- dynamic: input or multiple-choice buttons -->
+        </div>
+        <div id="feedback" class="feedback" aria-live="polite"></div>
+        <div class="card-footer">
+          <button id="btnNext" class="btn primary">Câu tiếp</button>
+        </div>
+      </div>
+      <canvas id="confettiCanvas" class="confetti-canvas" aria-hidden="true"></canvas>
+    </section>
+
+    <section class="stats">
+      <div class="stat">
+        <div class="label">Đúng</div>
+        <div class="value" id="statCorrect">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Sai</div>
+        <div class="value" id="statWrong">0</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <span>Tip: Bạn có thể thêm dữ liệu ở trang “Nhập dữ liệu”, sau đó quay lại ôn tập.</span>
+  </footer>
+
+  <script src="assets/js/utils.js"></script>
+  <script src="assets/js/learn.js"></script>
+</body>
+</html>
