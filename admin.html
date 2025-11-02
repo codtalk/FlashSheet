@@ -43,21 +43,15 @@
 
     <section class="io-panel">
       <div class="io-actions">
-        <label class="btn" for="importFile">Nhập CSV/JSON (tuỳ chọn)
+        <!-- <label class="btn" for="importFile">Nhập CSV/JSON (tuỳ chọn)
           <input type="file" id="importFile" accept="application/json,.json,text/csv,.csv" hidden />
-        </label>
+        </label> -->
         <button id="btnSync" class="btn primary" title="Đồng bộ 2 chiều với Google Sheet (không xoá dữ liệu)">Đồng bộ (Sheet ↔ Local)</button>
       </div>
       <p class="hint">Dữ liệu mặc định lưu trong Local Storage. Nên cấu hình Google Sheet để đồng bộ giữa các thiết bị. Nút “Đồng bộ” sẽ tải từ Sheet về và đẩy các từ mới từ Local lên Sheet (không xoá dữ liệu ở hai phía).</p>
     </section>
 
     
-
-    <section class="dataset-list">
-      <h2>Bộ từ hiện có</h2>
-      <div id="datasetInfo" class="dataset-info">Đang tải…</div>
-      <ul id="datasetList" class="list"></ul>
-    </section>
 
     <section class="io-panel">
       <h2>Đồng bộ Google Sheet</h2>
@@ -84,6 +78,13 @@
         <button id="btnSheetLoad" class="btn">Tải từ Sheet</button>
         <button id="btnSheetSaveCfg" class="btn secondary">Lưu cấu hình</button>
       </div>
+    </section>
+
+    <!-- Move the dataset box to the very bottom and make it scrollable -->
+    <section class="dataset-list">
+      <h2>Bộ từ hiện có</h2>
+      <div id="datasetInfo" class="dataset-info">Đang tải…</div>
+      <ul id="datasetList" class="list"></ul>
     </section>
   </main>
 

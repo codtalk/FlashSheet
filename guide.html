@@ -61,58 +61,66 @@
 
       <div class="card guide-card" style="padding:12px 14px">
         <h4 style="margin:4px 0 8px">Mã doPost (copy/paste vào Apps Script)</h4>
-        <pre style="white-space:pre-wrap; word-break:break-word; background:rgba(255,255,255,.04); padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,.1)"><code>// Web App endpoint: nhận POST từ FlashSheet và append vào Sheet
+        <pre style="white-space:pre-wrap; word-break:break-word; background:rgba(255,255,255,.04); padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,.1)"><code>// Web App endpoint: nhận POST từ FlashSheet, ghi từ vào 'Sheet1' và góp ý vào 'Feedback'
 function doPost(e) {
   try {
-    // Đặt tên sheet cần ghi (đổi cho phù hợp)
-    var SHEET_NAME = 'Sheet1';
+    var MAIN_SHEET = 'Sheet1';
+    var FEEDBACK_SHEET = 'Feedback';
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+    var main = ss.getSheetByName(MAIN_SHEET) || ss.getSheets()[0];
+    var fb = ss.getSheetByName(FEEDBACK_SHEET) || ss.insertSheet(FEEDBACK_SHEET);
 
-    // Với content-type: application/x-www-form-urlencoded
-    // FlashSheet gửi field 'rows' là JSON string của mảng các dòng
+    // FlashSheet gửi field 'rows' (application/x-www-form-urlencoded)
     var rowsParam = e && e.parameter && e.parameter.rows ? e.parameter.rows : null;
     if (!rowsParam) {
-      return ContentService
-        .createTextOutput(JSON.stringify({ ok: false, error: 'Missing rows param' }))
+      return ContentService.createTextOutput(JSON.stringify({ ok:false, error:'Missing rows param' }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
     var rows = JSON.parse(rowsParam);
     if (!Array.isArray(rows)) {
-      return ContentService
-        .createTextOutput(JSON.stringify({ ok: false, error: 'rows must be array' }))
+      return ContentService.createTextOutput(JSON.stringify({ ok:false, error:'rows must be array' }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Chuẩn hoá dữ liệu: [timestamp, word, definition]
     var now = new Date();
-    var values = rows.map(function(r) {
+    var mainValues = [];
+    var fbValues = [];
+    rows.forEach(function(r){
       var word = (r.word !== undefined ? r.word : (Array.isArray(r) ? r[0] : '')) || '';
-      var def  = (r.definition !== undefined ? r.definition : (Array.isArray(r) ? r[1] : '')) || '';
-      return [now, word, def];
+      var defs = (r.definition !== undefined ? r.definition : (Array.isArray(r) ? r[1] : (r.definitions || ''))) || '';
+      if (Array.isArray(defs)) defs = defs.join('; ');
+      // Route góp ý: nếu type=feedback hoặc word='[feedback]'
+      var isFeedback = (r.type && String(r.type).toLowerCase() === 'feedback') || word === '[feedback]';
+      if (isFeedback) {
+        var msg = (r.message !== undefined ? r.message : defs) || '';
+        var ctx = r.ctx || '';
+        var user = r.user || '';
+        fbValues.push([now, user, msg, ctx]);
+      } else {
+        mainValues.push([now, word, defs]);
+      }
     });
 
-    // Thêm header nếu sheet còn trống
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow(['timestamp', 'word', 'definition']);
+    if (mainValues.length){
+      if (main.getLastRow() === 0) main.appendRow(['timestamp','word','definition']);
+      main.getRange(main.getLastRow()+1, 1, mainValues.length, 3).setValues(mainValues);
+    }
+    if (fbValues.length){
+      if (fb.getLastRow() === 0) fb.appendRow(['timestamp','user','message','context']);
+      fb.getRange(fb.getLastRow()+1, 1, fbValues.length, 4).setValues(fbValues);
     }
 
-    // Ghi các dòng mới
-    sheet.getRange(sheet.getLastRow() + 1, 1, values.length, 3).setValues(values);
-
-    return ContentService
-      .createTextOutput(JSON.stringify({ ok: true, appended: values.length }))
+    return ContentService.createTextOutput(JSON.stringify({ ok:true, appendedMain: mainValues.length, appendedFeedback: fbValues.length }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ ok: false, error: String(err) }))
+    return ContentService.createTextOutput(JSON.stringify({ ok:false, error:String(err) }))
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
-// Gợi ý: Đảm bảo triển khai Web app với Execute as: Me, Who has access: Anyone.
-// Sau mỗi lần chỉnh sửa mã, cần triển khai phiên bản mới (xem mục "Cập nhật & reset" bên dưới).
+// Không cần web app thứ hai cho góp ý. Dùng chung endpoint, mã sẽ tự ghi vào sheet 'Feedback'.
+// Sau khi chỉnh, hãy Deploy → Manage deployments → Edit → New version → Deploy để cập nhật.
 </code></pre>
       </div>
 
@@ -140,6 +148,15 @@ function doPost(e) {
         <li><b>Google Sheets CSV (Publish to web)</b>: Bản CSV công khai có thể trễ 1–5 phút. Có thể <i>Unpublish</i> rồi <i>Publish</i> lại. Trong ứng dụng, bạn cũng có thể thêm tham số ngẫu nhiên vào URL (ví dụ: <code>&cachebust=1699999999999</code>) để “bẻ cache” trên trình duyệt.</li>
         <li><b>GitHub Pages / Trình duyệt</b>: Thử <span class="kbd">Cmd</span>+<span class="kbd">Shift</span>+<span class="kbd">R</span> để hard refresh hoặc mở cửa sổ ẩn danh. Nếu cần, cập nhật query <code>?v=timestamp</code> cho tệp CSS/JS khi bạn publish phiên bản mới.</li>
         <li><b>Local Storage</b>: Nếu dữ liệu cũ vẫn hiển thị, xoá các khoá <code>fs_dataset</code> và <code>fs_sheet_config</code> trong DevTools → Application → Local Storage, hoặc nhập lại từ Sheet rồi bấm Đồng bộ.</li>
+      </ul>
+    </div>
+
+    <div class="card guide-card">
+      <h3>7) Góp ý (Feedback)</h3>
+      <ul class="tight">
+        <li>Trong app, phần “Góp ý nhanh” sẽ gửi phản hồi tới một sheet trung tâm cố định (cấu hình sẵn trong mã). Người dùng không cần nhập URL.</li>
+        <li>Nếu đang offline hoặc endpoint không phản hồi, góp ý sẽ được lưu tạm trên máy và tự gửi lại khi mở app sau này.</li>
+        <li>Phần từ vựng (data học) vẫn dùng sheet của bạn theo cấu hình CSV/Apps Script riêng.</li>
       </ul>
     </div>
   </main>

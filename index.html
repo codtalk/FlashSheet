@@ -16,6 +16,7 @@
     <nav class="nav">
       <a href="index.html" class="nav-btn" aria-current="page">Học từ vựng</a>
       <a href="admin.html" class="nav-btn">Nhập dữ liệu</a>
+      <a href="feedback.html" class="nav-btn">Góp ý</a>
       <a href="guide.html" class="nav-btn secondary">Hướng dẫn</a>
     </nav>
   </header>
@@ -32,11 +33,8 @@
       </div>
       <div class="actions">
         <button id="btnShuffle" class="btn">Trộn câu hỏi</button>
-        <button id="btnSheetReload" class="btn secondary" title="Tải mới từ Google Sheet (nếu cấu hình)">Tải từ Sheet</button>
-        <label class="btn secondary" for="importFile">
-          Nhập JSON/CSV
-          <input type="file" id="importFile" accept="application/json,.json,text/csv,.csv" hidden />
-        </label>
+        
+        <button id="btnResetProgress" class="btn outline" title="Xoá tiến độ học (thống kê & lặp lại)">Reset tiến độ</button>
       </div>
     </section>
 
@@ -66,6 +64,21 @@
       <div class="stat">
         <div class="label">Sai</div>
         <div class="value" id="statWrong">0</div>
+      </div>
+    </section>
+
+    <section class="io-panel">
+      <h2>Feedback</h2>
+      <div class="form-row">
+        <label for="feedbackUser">Tên (tuỳ chọn)</label>
+        <input id="feedbackUser" class="answer-input" placeholder="Tên hoặc nickname (để chúng mình liên hệ/ghi nhận)" />
+      </div>
+      <div class="form-row">
+        <label for="feedbackText">Nội dung</label>
+        <textarea id="feedbackText" class="answer-input" placeholder="Nhập góp ý của bạn..."></textarea>
+      </div>
+      <div class="io-actions">
+        <button id="btnSendFeedback" class="btn">Gửi</button>
       </div>
     </section>
   </main>

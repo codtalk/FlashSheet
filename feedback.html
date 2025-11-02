@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlashSheet — Góp ý</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231c1f44'/%3E%3Cpath d='M10 42h44' stroke='%2306b6d4' stroke-width='6' stroke-linecap='round'/%3E%3Ctext x='14' y='40' font-family='Inter, Arial' font-size='20' fill='%23a78bfa' font-weight='800'%3EF%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+  <style>
+    .table{width:100%; border-collapse:collapse}
+    .table th,.table td{border-bottom:1px solid rgba(255,255,255,.06); padding:10px; text-align:left}
+    .table th{color:#a5adbb; font-weight:600}
+    .table tr:hover td{background:rgba(255,255,255,.03)}
+    .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px}
+    .input{padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:#101431; color:#fff}
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="index.html" aria-label="Trang chủ">FlashSheet</a>
+    <nav class="nav">
+      <a href="index.html" class="nav-btn">Học từ vựng</a>
+      <a href="admin.html" class="nav-btn">Nhập dữ liệu</a>
+      <a href="feedback.html" class="nav-btn" aria-current="page">Góp ý</a>
+      <a href="guide.html" class="nav-btn secondary">Hướng dẫn</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <h1>Danh sách góp ý</h1>
+    <div class="io-panel">
+      <div class="toolbar">
+        <button id="btnLoadFb" class="btn">Làm mới danh sách</button>
+      </div>
+      <p class="hint">Danh sách góp ý từ hệ thống trung tâm (đã cố định). Trang chỉ-đọc, không cần nhập link.</p>
+      <div style="overflow:auto">
+        <table class="table" id="fbTable">
+          <thead>
+            <tr><th>Thời gian</th><th>Người gửi</th><th>Nội dung</th><th>Ngữ cảnh</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <span>Xem góp ý mới nhất bằng cách bấm "Tải góp ý".</span>
+  </footer>
+
+  <script>
+    const DEFAULT_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuYF-fncf9PSBfkDPMAv_q4LiYColRiVIpUniAUKuQFLPXqXhMgkYsTmoDr-BCv5aqaqNRAnYx7_TC/pub?gid=1791101310&single=true&output=csv';
+
+    async function fetchCSV(url){
+      const res = await fetch(url, { cache:'no-store' });
+      if (!res.ok) throw new Error('Không tải được CSV góp ý');
+      return await res.text();
+    }
+    function parseRows(csv){
+      const lines = csv.split(/\r?\n/);
+      if (!lines.length) return [];
+      const rows = [];
+      // simple RFC4180-like parsing for quotes
+      function splitCSVLine(line){
+        const out=[]; let cur=''; let inQ=false; for(let i=0;i<line.length;i++){ const ch=line[i];
+          if (ch==='"'){
+            if (inQ && line[i+1]==='"'){ cur+='"'; i++; }
+            else { inQ=!inQ; }
+          } else if (ch===',' && !inQ){ out.push(cur); cur=''; }
+          else { cur+=ch; }
+        }
+        out.push(cur); return out;
+      }
+      // skip header
+      for (let i=1;i<lines.length;i++){
+        const line = lines[i]; if (!line) continue;
+        rows.push(splitCSVLine(line));
+      }
+      return rows;
+    }
+    const btn = document.getElementById('btnLoadFb');
+    const tbody = document.querySelector('#fbTable tbody');
+    async function loadFeedback(){
+      const url = DEFAULT_CSV_URL;
+      try{
+        const text = await fetchCSV(url);
+        const rows = parseRows(text);
+        tbody.innerHTML = '';
+        rows.forEach(cols => {
+          const tr = document.createElement('tr');
+          const ts = (cols[0]||'').trim();
+          const user = (cols[1]||'').trim();
+          const msg = (cols[2]||'').trim();
+          const ctx = cols.slice(3).join(',').trim();
+        tr.innerHTML = `<td>${ts}</td><td>${user}</td><td>${msg}</td><td>${ctx}</td>`;
+          tbody.appendChild(tr);
+        });
+      }catch(e){
+        alert(e.message||'Lỗi không xác định');
+      }
+    }
+    btn.addEventListener('click', loadFeedback);
+    // Default to central CSV and auto-load
+    window.addEventListener('DOMContentLoaded', () => {
+      loadFeedback();
+    });
+  </script>
+</body>
+</html>

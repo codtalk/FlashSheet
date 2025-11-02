@@ -6,7 +6,6 @@
   const wordForm = document.getElementById('wordForm');
   const wordInput = document.getElementById('wordInput');
   const btnReset = document.getElementById('btnReset');
-  const importFile = document.getElementById('importFile');
   const btnSync = document.getElementById('btnSync');
   const datasetInfo = document.getElementById('datasetInfo');
   const datasetList = document.getElementById('datasetList');
@@ -60,6 +59,7 @@
   }
 
   async function refreshDatasetSummary(){
+    // Show current Local Storage dataset so user sees pulled Sheet data
     dataset = await LE.loadDataset();
     datasetInfo.textContent = `${dataset.length} từ vựng`;
     datasetList.innerHTML = '';
@@ -120,22 +120,7 @@
     ensureOneDef();
   });
 
-  importFile.addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try{
-      const data = await LE.importDatasetFromFile(file);
-      if (!Array.isArray(data)) throw new Error('Dữ liệu không hợp lệ');
-      dataset = data;
-      LE.saveDatasetToLocal(dataset);
-      refreshDatasetSummary();
-      alert('Đã nhập dữ liệu JSON');
-    }catch(err){
-      alert('Không thể đọc JSON: ' + err.message);
-    } finally {
-      importFile.value = '';
-    }
-  });
+  // Removed: import CSV/JSON on admin page
 
   // Merge helpers
   function normalizeWord(w){ return (w||'').toString().trim().toLowerCase(); }
@@ -199,11 +184,21 @@
     }
   }
 
-  // Full sync: pull from sheet (merge to local) then push new local items to sheet
+  // Full sync: pull from sheet (merge to local) then push new local items to sheet (if write URL configured)
   btnSync?.addEventListener('click', async () => {
     // Pull from sheet
     const sheetData = await getSheetDataset();
-    const localData = await LE.loadDataset();
+    // Prefer Local Storage; if empty, fall back to bundled file so we can push file->sheet
+    let localData = await LE.loadDataset();
+    if (!Array.isArray(localData) || localData.length === 0) {
+      const fileData = await LE.loadDatasetFromFile();
+      if (Array.isArray(fileData) && fileData.length) {
+        localData = fileData;
+        // keep local storage in sync for next time
+        LE.saveDatasetToLocal(localData);
+      }
+    }
+
     const sheetMap = toMap(sheetData);
     const localMap = toMap(localData);
     // merge both ways into local
@@ -215,19 +210,40 @@
     LE.saveDatasetToLocal(merged);
     await refreshDatasetSummary();
     showToast(`Tải từ Sheet: +${sheetData.length} (hợp nhất)`, 'success');
-    // Push deltas up
-    await pushDeltasToSheet(localMap, sheetMap);
+    // Push deltas up (local minus sheet) if write URL configured
+    const writeUrl = (sheetCfg && sheetCfg.writeUrl) || (sheetWriteUrlEl?.value?.trim());
+    if (writeUrl) {
+      await pushDeltasToSheet(localMap, sheetMap);
+    } else {
+      showToast('Chưa cấu hình Write URL — đã đồng bộ về Local, bỏ qua đẩy lên Sheet', 'error');
+    }
   });
+
+  // Removed feature: vocab.json -> Sheet one-way sync
 
   // init
   ensureOneDef();
-  refreshDatasetSummary();
   loadSheetForm();
+  // If no sheet configured, populate Local Storage from vocab.json once
+  (async function bootstrapLocalFromFileIfNeeded(){
+    try{
+      const hasSheet = !!(sheetCfg && sheetCfg.csvUrl);
+      const local = await LE.loadDataset();
+      if (!hasSheet && (!Array.isArray(local) || local.length === 0)){
+        const fileData = await LE.loadDatasetFromFile();
+        if (Array.isArray(fileData) && fileData.length){
+          LE.saveDatasetToLocal(fileData);
+        }
+      }
+    }catch(e){ console.warn('bootstrapLocalFromFileIfNeeded failed', e); }
+    // After potential bootstrap, show summary from file
+    refreshDatasetSummary();
+  })();
 
   // Sheet handlers
   btnUseThienPreset?.addEventListener('click', async () => {
-    const csv = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuYF-fncf9PSBfkDPMAv_q4LiYColRiVIpUniAUKuQFLPXqXhMgkYsTmoDr-BCv5aqaqNRAnYx7_TC/pub?gid=0&single=true&output=csv';
-    const write = 'https://script.google.com/macros/s/AKfycbyB81ZUsePXtxhDBsfbE2QB1XGVOQ9plTdr9W3AAMC_4uB52Uj2P8DNhhWZXzrp2P1JHQ/exec';
+    const csv = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuYF-fncf9PSBfkDPMAv_q4LiYColRiVIpUniAUKuQFLPXqXhMgkYsTmoDr-BCv5aqaqNRAnYx7_TC/pub?output=csv';
+    const write = 'https://script.google.com/macros/s/AKfycbwMVuW1ytLKTZID5dnNoHKdp9EoqcEcrzaG3jKl0xelPtYhqNoeuBLi8XlcXBwBhAL4mg/exec';
     if (sheetCsvUrlEl) sheetCsvUrlEl.value = csv;
     if (sheetWriteUrlEl) sheetWriteUrlEl.value = write;
     sheetCfg = {

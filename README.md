@@ -80,33 +80,62 @@ apple,A round fruit,Quả táo
   - App tính phần chênh: những định nghĩa ở Local mà Sheet chưa có → đẩy lên Sheet bằng các dòng append mới (không xoá gì trên Sheet).
   - Kết quả: Cả hai phía đều tăng thêm dữ liệu mới, không mất chữ.
 
-Mẫu Apps Script (Code.gs) — hỗ trợ JSON và form-urlencoded (khuyên dùng form-urlencoded để tránh CORS preflight):
+Mẫu Apps Script (Code.gs) — ghi từ vào 'Sheet1' và góp ý vào 'Feedback' (khuyên dùng form-urlencoded để tránh CORS preflight):
 ```javascript
 function doPost(e) {
-  const ss = SpreadsheetApp.openById('YOUR_SHEET_ID');
-  const sh = ss.getSheetByName('Sheet1');
-
-  let rows = [];
   try {
-    if (e.postData && e.postData.type && e.postData.type.indexOf('application/json') !== -1) {
-      const body = JSON.parse(e.postData.contents || '{}');
-      rows = (body.rows || []);
-    } else if (e.parameter && e.parameter.rows) {
-      rows = JSON.parse(e.parameter.rows);
-    }
-  } catch(err) {
-    rows = [];
-  }
+    var MAIN_SHEET = 'Sheet1';
+    var FEEDBACK_SHEET = 'Feedback';
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var main = ss.getSheetByName(MAIN_SHEET) || ss.getSheets()[0];
+    var fb = ss.getSheetByName(FEEDBACK_SHEET) || ss.insertSheet(FEEDBACK_SHEET);
 
-  const toAppend = rows.map(r => [new Date(), r.word || '', r.definitions || '']);
-  if (toAppend.length) {
-    sh.getRange(sh.getLastRow()+1, 1, toAppend.length, 3).setValues(toAppend);
+    var rowsParam = e && e.parameter && e.parameter.rows ? e.parameter.rows : null;
+    if (!rowsParam) return ContentService.createTextOutput(JSON.stringify({ ok:false, error:'Missing rows' })).setMimeType(ContentService.MimeType.JSON);
+    var rows = JSON.parse(rowsParam);
+    if (!Array.isArray(rows)) return ContentService.createTextOutput(JSON.stringify({ ok:false, error:'rows must be array' })).setMimeType(ContentService.MimeType.JSON);
+
+    var now = new Date();
+    var mainValues = [];
+    var fbValues = [];
+    rows.forEach(function(r){
+      var word = (r.word !== undefined ? r.word : (Array.isArray(r) ? r[0] : '')) || '';
+      var defs = (r.definition !== undefined ? r.definition : (Array.isArray(r) ? r[1] : (r.definitions || ''))) || '';
+      if (Array.isArray(defs)) defs = defs.join('; ');
+      var isFeedback = (r.type && String(r.type).toLowerCase() === 'feedback') || word === '[feedback]';
+      if (isFeedback) {
+        var msg = (r.message !== undefined ? r.message : defs) || '';
+        var ctx = r.ctx || '';
+        var user = r.user || '';
+        fbValues.push([now, user, msg, ctx]);
+      } else {
+        mainValues.push([now, word, defs]);
+      }
+    });
+
+    if (mainValues.length){
+      if (main.getLastRow() === 0) main.appendRow(['timestamp','word','definition']);
+      main.getRange(main.getLastRow()+1, 1, mainValues.length, 3).setValues(mainValues);
+    }
+    if (fbValues.length){
+      if (fb.getLastRow() === 0) fb.appendRow(['timestamp','user','message','context']);
+      fb.getRange(fb.getLastRow()+1, 1, fbValues.length, 4).setValues(fbValues);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ ok:true, appendedMain: mainValues.length, appendedFeedback: fbValues.length }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ ok:false, error:String(err) }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
-  return ContentService.createTextOutput(JSON.stringify({ ok: true, appended: toAppend.length }))
-    .setMimeType(ContentService.MimeType.JSON);
 }
 ```
-Triển khai: Deploy → New deployment → Type: Web app → Execute as: Me → Who has access: Anyone (hoặc Anyone with the link) → Deploy. Copy "Web app URL" và dán vào app.
+Triển khai: Deploy → New deployment → Type: Web app → Execute as: Me → Who has access: Anyone (hoặc Anyone with the link) → Deploy. Copy "Web app URL" và dán vào app. Khi cập nhật mã, vào Manage deployments → Edit → chọn New version → Deploy (không cần tạo endpoint thứ hai cho góp ý).
+
+4) Góp ý (feedback) cố định về sheet trung tâm
+- App đã cấu hình sẵn endpoint góp ý trung tâm trong code, người dùng không cần nhập URL.
+- Dữ liệu góp ý được gửi bằng type='feedback' (hoặc word='[feedback]') và sẽ ghi vào sheet 'Feedback' của hệ thống trung tâm.
+- Nếu đang offline hoặc lỗi mạng, góp ý sẽ lưu tạm trên Local Storage và tự gửi lại khi có kết nối.
 
 3) Kiểm tra nhanh và khắc phục sự cố
 - Lần đầu mở Web App URL có thể thấy cảnh báo "Google hasn’t verified this app" → bấm Advanced → Go to ... (unsafe) → Allow (chỉ cần chủ dự án thực hiện lần đầu).

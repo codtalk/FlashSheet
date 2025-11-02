@@ -1,29 +1,29 @@
 // utils.js - shared helpers for LearnEnglish
+// Centralized endpoints
+const FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbwMVuW1ytLKTZID5dnNoHKdp9EoqcEcrzaG3jKl0xelPtYhqNoeuBLi8XlcXBwBhAL4mg/exec';
 
 // Storage keys
-const STORAGE_KEY = 'learnEnglish.dataset.v1';
-const SHEET_CFG_KEY = 'learnEnglish.sheetConfig.v1';
+const STORAGE_KEY = 'learnEnglish.dataset.v2';
+const SHEET_CFG_KEY = 'learnEnglish.sheetConfig.v2';
 
-// Load dataset: prefer localStorage, else fetch from /data/vocab.json
+// Load dataset: LOCAL-ONLY (do not fallback to file)
+// First-run bootstrap should be handled by callers using loadDatasetFromFile() then saveDatasetToLocal()
 async function loadDataset() {
   try {
     const ls = localStorage.getItem(STORAGE_KEY);
-    if (ls) {
-      return JSON.parse(ls);
-    }
+    if (ls) return JSON.parse(ls);
   } catch (e) {
     console.warn('LocalStorage parse error', e);
   }
-  // Fallback: fetch default dataset
+  return [];
+}
+
+// Always load from bundled file (ignores Local Storage)
+async function loadDatasetFromFile(){
   try {
     const resp = await fetch('data/vocab.json', { cache: 'no-store' });
-    if (resp.ok) {
-      const data = await resp.json();
-      return data;
-    }
-  } catch (e) {
-    console.warn('Fetch default dataset failed', e);
-  }
+    if (resp.ok) return await resp.json();
+  } catch(e){ console.warn('Fetch vocab.json failed', e); }
   return [];
 }
 
@@ -223,7 +223,12 @@ async function fetchSheetCSV(url){
 // rows: Array<{word, definitions: string[]}>; server decides how to store
 async function appendRowsToSheet(endpoint, rows){
   if (!endpoint) throw new Error('Thiếu Apps Script URL');
-  const compact = rows.map(r => ({ word: r.word, definitions: (r.definitions||[]).join('; ') }));
+  const compact = rows.map(r => {
+    if (r && r.type === 'feedback') {
+      return { type: 'feedback', message: r.message || '', ctx: r.ctx || '', user: r.user || '' };
+    }
+    return { word: r.word, definitions: (r.definitions||[]).join('; ') };
+  });
   // Use form-urlencoded to avoid CORS preflight to Apps Script
   const body = 'rows=' + encodeURIComponent(JSON.stringify(compact));
   try {
@@ -254,6 +259,8 @@ async function appendRowsToSheet(endpoint, rows){
 
 // Export common helpers
 window.LE = {
+  FEEDBACK_URL,
+  loadDatasetFromFile,
   loadDataset,
   saveDatasetToLocal,
   clearDatasetLocal,

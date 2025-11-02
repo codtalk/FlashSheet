@@ -1,30 +1,843 @@
 [
   {
-    "word": "apple",
+    "word": "Deep Learning",
     "definitions": [
-      "A round fruit with red, green, or yellow skin",
-      "Quả táo"
+      "Học sâu",
+      "____ ________ is like an artificial brain with many, many layers.",
+      "You need a good GPU to train a ____ ________ model, or you'll be waiting for days!",
+      "It's called 'deep' because the network structure is, well, ____."
     ]
   },
   {
-    "word": "run",
+    "word": "Exhibited",
     "definitions": [
-      "To move quickly on foot",
-      "Chạy"
+      "Đã thể hiện / Trưng bày",
+      "The new AI model _________ amazing skills in chess.",
+      "He _________ all the signs of being 'overwhelmed' by math."
     ]
   },
   {
-    "word": "book",
+    "word": "Human Intelligence",
     "definitions": [
-      "A set of pages bound together; a written or printed work",
-      "Sách"
+      "Trí tuệ con người",
+      "AI is trying to mimic _____ ____________.",
+      "That was a stupid mistake... clearly not an example of _____ ____________!"
     ]
   },
   {
-    "word": "blue",
+    "word": "Detect Heart Disease from Images",
     "definitions": [
-      "A color like the sky on a clear day",
-      "Màu xanh dương"
+      "Phát hiện bệnh tim từ hình ảnh",
+      "Using AI to ______ _____ _______ ____ ______ can save many lives.",
+      "Your model's job is to ______ _____ _______ ____ ______ just by looking at an X-ray."
+    ]
+  },
+  {
+    "word": "Approach",
+    "definitions": [
+      "Phương pháp / Cách tiếp cận",
+      "What ________ would you take to solve this data problem?",
+      "His ________ to learning ML is very 'hands-on'."
+    ]
+  },
+  {
+    "word": "Achieve",
+    "definitions": [
+      "Đạt được",
+      "You need a solid plan to _______ your goal of $3k/month.",
+      "It's hard work, but you can _______ it."
+    ]
+  },
+  {
+    "word": "Artificial",
+    "definitions": [
+      "(Thuộc về) Nhân tạo",
+      "__________ Intelligence is the main field you are studying.",
+      "This is not real sugar, it's an __________ sweetener."
+    ]
+  },
+  {
+    "word": "Derive",
+    "definitions": [
+      "Rút ra / Lấy được từ",
+      "We can ______ 'actionable insights' *from* this raw data.",
+      "He's trying to ______ a new formula."
+    ]
+  },
+  {
+    "word": "Theoretical",
+    "definitions": [
+      "Mang tính lý thuyết",
+      "That sounds good in a ___________ paper, but will it work in practice?",
+      "You need both ___________ knowledge and practical skills."
+    ]
+  },
+  {
+    "word": "Academic",
+    "definitions": [
+      "Mang tính học thuật",
+      "This book is very ________ and dry.",
+      "He spent his entire life in the ________ world."
+    ]
+  },
+  {
+    "word": "Research",
+    "definitions": [
+      "Nghiên cứu",
+      "He works in the ________ and Development (R&D) department.",
+      "Doing ________ is like finding a needle in a haystack, but you built the haystack."
+    ]
+  },
+  {
+    "word": "Another Term",
+    "definitions": [
+      "Một thuật ngữ khác",
+      "Is 'Data Mining' just _______ ____ for 'Analytics'?",
+      "'Overfit' is _______ ____ for 'your model memorized the test'."
+    ]
+  },
+  {
+    "word": "Encompass",
+    "definitions": [
+      "Bao trùm / Bao hàm",
+      "Does the field of AI also _________ robotics?",
+      "Your study plan should _________ both English and ML."
+    ]
+  },
+  {
+    "word": "Entire",
+    "definitions": [
+      "Toàn bộ",
+      "He spent the ______ day debugging one line of code.",
+      "The ______ team was impressed by the model's accuracy."
+    ]
+  },
+  {
+    "word": "Essentially",
+    "definitions": [
+      "Về cơ bản / Thực chất là",
+      "A neural network is, ___________, a very complicated math function.",
+      "He's ___________ saying that data is the new oil."
+    ]
+  },
+  {
+    "word": "Witnessed",
+    "definitions": [
+      "Đã chứng kiến",
+      "We have _________ a huge boom in AI in the last 10 years.",
+      "I _________ the model overfitting in real-time."
+    ]
+  },
+  {
+    "word": "Predict",
+    "definitions": [
+      "Dự đoán",
+      "The model tries to _______ the price of a house.",
+      "It's hard to _______ the future, but AI is trying."
+    ]
+  },
+  {
+    "word": "Evolves",
+    "definitions": [
+      "Tiến hóa / Phát triển",
+      "The field of AI _______ so quickly, it's hard to keep up.",
+      "Your model _______ as it sees more data."
+    ]
+  },
+  {
+    "word": "The Advent",
+    "definitions": [
+      "Sự ra đời (của...)",
+      "___ ______ of powerful GPUs changed Deep Learning forever.",
+      "Life was harder before ___ ______ of the internet."
+    ]
+  },
+  {
+    "word": "Gain an Edge",
+    "definitions": [
+      "Giành được lợi thế",
+      "Companies use data to ____ __ ____ over their competitors.",
+      "Learning ML will help you ____ __ ____ in the job market."
+    ]
+  },
+  {
+    "word": "Forecasting",
+    "definitions": [
+      "Dự báo (thường là chuỗi thời gian)",
+      "Weather ___________ is a classic data science problem.",
+      "We use this model for sales ___________."
+    ]
+  },
+  {
+    "word": "Gathered",
+    "definitions": [
+      "Đã thu thập",
+      "We have ________ a massive amount of data.",
+      "All the students ________ in the lecture hall."
+    ]
+  },
+  {
+    "word": "Even More",
+    "definitions": [
+      "Thậm chí còn nhiều hơn",
+      "This model is ____ ____ accurate than the last one.",
+      "Learning ML is hard, but learning English at the same time is ____ ____ difficult."
+    ]
+  },
+  {
+    "word": "Profitable",
+    "definitions": [
+      "Có lợi nhuận",
+      "Being an ML engineer can be a very __________ career.",
+      "They are looking for a __________ business idea."
+    ]
+  },
+  {
+    "word": "In the 2000s",
+    "definitions": [
+      "Trong những năm 2000",
+      "Many of these ideas came from __ ___ _____, but the computers weren't fast enough.",
+      "He was born __ ___ _____."
+    ]
+  },
+  {
+    "word": "Fancy Term",
+    "definitions": [
+      "Thuật ngữ hoa mỹ",
+      "'Deep Learning' used to be a _____ ____ for a neural network with many layers.",
+      "Don't be intimidated by a _____ ____; the concept is usually simple."
+    ]
+  },
+  {
+    "word": "Accumulating",
+    "definitions": [
+      "Tích lũy / Gom tụ",
+      "We are ____________ data at an insane rate.",
+      "Dust is ____________ on his unused textbooks."
+    ]
+  },
+  {
+    "word": "Insane",
+    "definitions": [
+      "Điên rồ",
+      "Training this model requires an ______ amount of data.",
+      "Your two-year plan is ambitious, bordering on ______!"
+    ]
+  },
+  {
+    "word": "Purchasing Histories",
+    "definitions": [
+      "Lịch sử mua hàng",
+      "Amazon recommends products based on your __________ _________.",
+      "Analyzing __________ _________ can reveal interesting patterns."
+    ]
+  },
+  {
+    "word": "Messy",
+    "definitions": [
+      "Lộn xộn / Bừa bộn",
+      "Real-world data is always _____, and you are the one who has to clean it.",
+      "My code becomes very _____ when I'm tired."
+    ]
+  },
+  {
+    "word": "Came into Existence",
+    "definitions": [
+      "Ra đời / Hình thành",
+      "The term 'Artificial Intelligence' ____ ____ _________ in 1956.",
+      "This problem only ____ ____ _________ recently."
+    ]
+  },
+  {
+    "word": "Out of That",
+    "definitions": [
+      "Từ đó / Nổi lên từ đó",
+      "We have a pile of raw data. We need to make sense ___ __ ____.",
+      "A new theory emerged ___ __ ____ research."
+    ]
+  },
+  {
+    "word": "Ever Since Then",
+    "definitions": [
+      "Kể từ đó",
+      "He learned his first line of code, and ____ _____ ____, he's been hooked.",
+      "The company launched its AI division in 2010 and has been growing ____ _____ ____."
+    ]
+  },
+  {
+    "word": "Wasting",
+    "definitions": [
+      "Lãng phí",
+      "Having data and not using it is _______ a huge opportunity.",
+      "Stop _______ time on social media and go study!"
+    ]
+  },
+  {
+    "word": "Massive",
+    "definitions": [
+      "To lớn / Khổng lồ",
+      "You need a _______ dataset to train a good Deep Learning model.",
+      "This is a _______ challenge, but you can do it."
+    ]
+  },
+  {
+    "word": "To Figure Things Out",
+    "definitions": [
+      "Để tìm ra/hiểu ra vấn đề",
+      "An ML model is essentially a complex way __ ______ ______ ___.",
+      "Give me a minute, I'm trying __ ______ ______ ___."
+    ]
+  },
+  {
+    "word": "Graphical",
+    "definitions": [
+      "(Thuộc về) Đồ họa",
+      "A GPU is a _________ Processing Unit.",
+      "This software has a nice _________ user interface (GUI)."
+    ]
+  },
+  {
+    "word": "Advancements",
+    "definitions": [
+      "Những tiến bộ",
+      "Recent ___________ in GPU technology have made Deep Learning possible.",
+      "He is excited about the latest ___________ in AI."
+    ]
+  },
+  {
+    "word": "Intimidated",
+    "definitions": [
+      "Bị dọa / Bị ngợp",
+      "Don't be ___________ by all the math; you can learn it step-by-step.",
+      "I was ___________ by the senior engineers at first."
+    ]
+  },
+  {
+    "word": "Brief Overview",
+    "definitions": [
+      "Tổng quan ngắn gọn",
+      "The first lecture provides a _____ ________ of the entire course.",
+      "Can you give me a _____ ________ of your plan?"
+    ]
+  },
+  {
+    "word": "Grabbing Data",
+    "definitions": [
+      "Vơ/Lấy dữ liệu",
+      "The first step is ________ ____ from the website using a scraper.",
+      "He's just ________ ____ from multiple databases."
+    ]
+  },
+  {
+    "word": "Unless",
+    "definitions": [
+      "Trừ khi",
+      "Your model won't work ______ you clean the data first.",
+      "Don't interrupt me ______ the building is on fire."
+    ]
+  },
+  {
+    "word": "Unused",
+    "definitions": [
+      "Chưa được sử dụng",
+      "A lot of data collected by companies sits ______ in a database.",
+      "He has a pile of ______ notebooks."
+    ]
+  },
+  {
+    "word": "Useless",
+    "definitions": [
+      "Vô dụng",
+      "Data without analysis is _______.",
+      "This old computer is completely _______."
+    ]
+  },
+  {
+    "word": "Noisy",
+    "definitions": [
+      "Bị nhiễu (dữ liệu)",
+      "The sensor data was too _____ to be useful.",
+      "You must filter out the _____ data before training."
+    ]
+  },
+  {
+    "word": "Evolving",
+    "definitions": [
+      "(Đang) Tiến hóa / Phát triển",
+      "This is a rapidly ________ field.",
+      "My model is constantly ________ as it gets new data."
+    ]
+  },
+  {
+    "word": "Barely",
+    "definitions": [
+      "Hầu như không / Vừa đủ",
+      "We have ______ enough data to train this model.",
+      "I was so tired I could ______ keep my eyes open."
+    ]
+  },
+  {
+    "word": "Scratched the Surface",
+    "definitions": [
+      "Mới chỉ lướt qua bề mặt",
+      "This intro course only _________ ___ _______ of what ML can do.",
+      "We've only _________ ___ _______ of this problem."
+    ]
+  },
+  {
+    "word": "As Well",
+    "definitions": [
+      "Cũng vậy / Nữa",
+      "You need to learn math, and programming __ ____.",
+      "She works in ML, and her husband does __ ____."
+    ]
+  },
+  {
+    "word": "Imagine",
+    "definitions": [
+      "Hãy tưởng tượng",
+      "_______ you could predict what a customer will buy next.",
+      "_______ being able to earn $3k remote! Keep working!"
+    ]
+  },
+  {
+    "word": "Axis",
+    "definitions": [
+      "Trục (trong biểu đồ)",
+      "The X-____ represents time, and the Y-____ represents price.",
+      "You labeled the wrong ____."
+    ]
+  },
+  {
+    "word": "Represents",
+    "definitions": [
+      "Đại diện cho / Tượng trưng cho",
+      "Each dot on this chart ___________ a customer.",
+      "The color red often ___________ danger."
+    ]
+  },
+  {
+    "word": "Across",
+    "definitions": [
+      "Ngang qua / Trên khắp",
+      "We found this pattern ______ all of our datasets.",
+      "This new rule applies ______ the entire company."
+    ]
+  },
+  {
+    "word": "Tend to",
+    "definitions": [
+      "Có xu hướng",
+      "People who buy this book also ____ __ buy that book.",
+      "Models ____ __ overfit if you don't use regularization."
+    ]
+  },
+  {
+    "word": "Pattern",
+    "definitions": [
+      "Quy luật / Mô thức",
+      "The goal of ML is to find a _______ in the data.",
+      "He noticed a strange _______ in the numbers."
+    ]
+  },
+  {
+    "word": "Right off the Bat",
+    "definitions": [
+      "Ngay lập tức / Ngay tắp lự",
+      "The model failed _____ ___ ___ ___ because the data was not clean.",
+      "I knew _____ ___ ___ ___ that this job was perfect for him."
+    ]
+  },
+  {
+    "word": "Complicated",
+    "definitions": [
+      "Phức tạp",
+      "Deep Learning models can be very ___________.",
+      "The instructions were too ___________ to understand."
+    ]
+  },
+  {
+    "word": "Preferences",
+    "definitions": [
+      "Sở thích / Sự ưu tiên",
+      "The model learns the user's music ___________.",
+      "Do you have any dietary ___________?"
+    ]
+  },
+  {
+    "word": "Obviously",
+    "definitions": [
+      "Rõ ràng là / Hiển nhiên",
+      "If you use bad data, your model will _________ be bad.",
+      "He _________ didn't read the manual."
+    ]
+  },
+  {
+    "word": "Blabbering On",
+    "definitions": [
+      "Nói huyên thuyên / Nói nhảm",
+      "The professor was just ___________ __ about theory I didn't understand.",
+      "Stop ___________ __ and get to the point!"
+    ]
+  },
+  {
+    "word": "Theory",
+    "definitions": [
+      "Lý thuyết",
+      "In ______, this should work. In practice, it explodes.",
+      "You need to understand the ______ behind the algorithm."
+    ]
+  },
+  {
+    "word": "Scenario",
+    "definitions": [
+      "Viễn cảnh / Kịch bản",
+      "What is the worst-case ________?",
+      "Let's imagine a ________ where we have no data."
+    ]
+  },
+  {
+    "word": "Hire",
+    "definitions": [
+      "Thuê / Tuyển dụng",
+      "The goal of your 2-year plan is to get ____d.",
+      "They want to ____ an engineer with ML skills."
+    ]
+  },
+  {
+    "word": "Perhaps",
+    "definitions": [
+      "Có lẽ",
+      "_______ this approach is better.",
+      "_______ you should take a break."
+    ]
+  },
+  {
+    "word": "Association",
+    "definitions": [
+      "Sự liên kết",
+      "The model found an ___________ between buying beer and buying diapers.",
+      "He works for a professional ___________ of engineers."
+    ]
+  },
+  {
+    "word": "Punishment",
+    "definitions": [
+      "Sự trừng phạt",
+      "In Reinforcement Learning, the agent gets a reward or a __________.",
+      "Forgetting to save your code is its own __________."
+    ]
+  },
+  {
+    "word": "Eventually Figures Out That",
+    "definitions": [
+      "Cuối cùng cũng nhận ra rằng",
+      "The model ___________ _______ ___ ____ 'A' is the best move.",
+      "After 2 years, you'll ___________ _______ ___ ____ it was all worth it."
+    ]
+  },
+  {
+    "word": "Skill Acquisition",
+    "definitions": [
+      "Sự tiếp thu kỹ năng",
+      "Your 2-year plan is a period of intense _____ __________.",
+      "Language learning is a form of _____ __________."
+    ]
+  },
+  {
+    "word": "Real-time Learning",
+    "definitions": [
+      "Học theo thời gian thực",
+      "The algorithm adjusts its strategy 'in real time', which is ____-____ ________.",
+      "____-____ ________ is much harder than offline training."
+    ]
+  },
+  {
+    "word": "Accomplish",
+    "definitions": [
+      "Hoàn thành",
+      "What do you hope to __________ with this model?",
+      "You can __________ anything if you focus."
+    ]
+  },
+  {
+    "word": "Broad",
+    "definitions": [
+      "Rộng lớn / Bao quát",
+      "'Artificial Intelligence' is a very _____ term.",
+      "He has a _____ understanding of the topic."
+    ]
+  },
+  {
+    "word": "Aspects",
+    "definitions": [
+      "Các khía cạnh",
+      "The course covers all _______ of ML.",
+      "This is one of the most difficult _______ of the job."
+    ]
+  },
+  {
+    "word": "Definitions",
+    "definitions": [
+      "Các định nghĩa",
+      "You are asking me to create JSON ___________ for your words.",
+      "It's important to agree on the ___________ of the terms."
+    ]
+  },
+  {
+    "word": "Interchangeably",
+    "definitions": [
+      "Có thể hoán đổi/dùng lẫn lộn",
+      "People often use the terms 'AI' and 'ML' ______________, but they are not the same.",
+      "These two words can be used ______________."
+    ]
+  },
+  {
+    "word": "For the Sake",
+    "definitions": [
+      "Vì mục đích / Vì lợi ích",
+      "___ ___ ____ of simplicity, let's assume the data is clean.",
+      "He's arguing just ___ ___ ____ of arguing."
+    ]
+  },
+  {
+    "word": "Practical",
+    "definitions": [
+      "Mang tính thực tế/Thực tiễn",
+      "Your plan to learn English and ML is very _________ for getting a job.",
+      "He gave me some good, _________ advice."
+    ]
+  },
+  {
+    "word": "Instructions",
+    "definitions": [
+      "Các hướng dẫn",
+      "The 'recipe' for training a model is like a set of ____________.",
+      "Did you read the ____________ before running the code?"
+    ]
+  },
+  {
+    "word": "Such As",
+    "definitions": [
+      "Chẳng hạn như / Như là",
+      "He's skilled in many areas, ____ __ Python and SQL.",
+      "We need to clean the data, ____ __ removing null values."
+    ]
+  },
+  {
+    "word": "A Pile of Raw Ingredients",
+    "definitions": [
+      "Một đống nguyên liệu thô (Ẩn dụ: Dữ liệu thô)",
+      "Your initial dataset is like _ ____ __ ___ ___________. You can't eat it yet.",
+      "You can't make a good meal from _ ____ __ ___ ___________ without cleaning them."
+    ]
+  },
+  {
+    "word": "Honey Mustard",
+    "definitions": [
+      "Mù tạt mật ong",
+      "_____ ________ is just an example of an 'ingredient' in the analogy.",
+      "This has nothing to do with ML, but _____ ________ is delicious."
+    ]
+  },
+  {
+    "word": "Season Chicken",
+    "definitions": [
+      "Ướp gà (Ẩn dụ: Tiền xử lý dữ liệu)",
+      "Cleaning and scaling your data is like how you ______ _______ before cooking.",
+      "You must '______ _______' (preprocess data) first!"
+    ]
+  },
+  {
+    "word": "Preheat the Oven",
+    "definitions": [
+      "Làm nóng lò nướng (Ẩn dụ: Thiết lập môi trường)",
+      "Before you 'train', you must '_______ ___ ____' by importing libraries.",
+      "The recipe says to _______ ___ ____ to 200 degrees."
+    ]
+  },
+  {
+    "word": "Come Out",
+    "definitions": [
+      "Ra lò / Đi ra",
+      "You put the data in, and a prediction will ____ ___.",
+      "The model '____ ___' of the oven (training) perfectly cooked."
+    ]
+  },
+  {
+    "word": "Far Too Hot",
+    "definitions": [
+      "Quá nóng",
+      "If your 'learning rate' is too high, the model's 'oven' is ___ ___ ___.",
+      "The oven was ___ ___ ___ and the chicken burned. My model failed."
+    ]
+  },
+  {
+    "word": "Little Close",
+    "definitions": [
+      "Hơi gần / Suýt",
+      "That prediction was a ______ _____, but not quite right.",
+      "Don't stand a ______ ____ to the 'hot' GPU."
+    ]
+  },
+  {
+    "word": "Combinations",
+    "definitions": [
+      "Các tổ hợp / Các kết hợp",
+      "The model tries millions of ____________ to find the best one.",
+      "We tried different ____________ of ingredients."
+    ]
+  },
+  {
+    "word": "In a Nutshell",
+    "definitions": [
+      "Tóm lại trong vỏ hạt dẻ (Nói ngắn gọn là...)",
+      "__ _ ________, ML is about finding patterns in data.",
+      "__ _ ________, your 2-year plan is awesome."
+    ]
+  },
+  {
+    "word": "Comparing",
+    "definitions": [
+      "(Đang) So sánh",
+      "We are _________ the performance of two different models.",
+      "Stop _________ yourself to others."
+    ]
+  },
+  {
+    "word": "Experiments",
+    "definitions": [
+      "Các thí nghiệm",
+      "Data Science is a lot of trial and error; you have to run many ___________.",
+      "Our ___________ showed that Model B was better."
+    ]
+  },
+  {
+    "word": "Actionable Insights",
+    "definitions": [
+      "Thông tin chi tiết có thể hành động",
+      "The boss doesn't want raw data, he wants __________ ________.",
+      "We found an __________ ________: customers who buy X also buy Y."
+    ]
+  },
+  {
+    "word": "Plenty of Hands-on Experience",
+    "definitions": [
+      "Nhiều kinh nghiệm thực chiến",
+      "To get hired, you need ______ __ _____-__ ___________, not just theory.",
+      "Your 2-year plan should include ______ __ _____-__ ___________."
+    ]
+  },
+  {
+    "word": "In Brief",
+    "definitions": [
+      "Nói tóm lại",
+      "__ _____, the project was a success.",
+      "__ _____, you need to study more."
+    ]
+  },
+  {
+    "word": "Comprehended",
+    "definitions": [
+      "Đã hiểu rõ",
+      "He finally ____________ the complex algorithm.",
+      "Have you fully ____________ the task?"
+    ]
+  },
+  {
+    "word": "Impressed",
+    "definitions": [
+      "Bị ấn tượng",
+      "I was _________ by the model's accuracy.",
+      "Your future boss will be _________ by your dedication."
+    ]
+  },
+  {
+    "word": "Standardize",
+    "definitions": [
+      "Chuẩn hóa",
+      "You should ___________ your features before feeding them into the model.",
+      "We need to ___________ the process so everyone does it the same way."
+    ]
+  },
+  {
+    "word": "Practices",
+    "definitions": [
+      "Các thông lệ / Quy trình (tốt)",
+      "Writing clean code is one of the 'best _________'.",
+      "What are the standard _________ for this company?"
+    ]
+  },
+  {
+    "word": "Clear Framework",
+    "definitions": [
+      "Một khung làm việc rõ ràng",
+      "CRISP-DM is a _____ _________ for data mining projects.",
+      "Following a _____ _________ helps you stay organized."
+    ]
+  },
+  {
+    "word": "Shouldn't Be",
+    "definitions": [
+      "Không nên / Không phải là",
+      "This file ________ __ in this folder.",
+      "You ________ __ afraid of the math."
+    ]
+  },
+  {
+    "word": "Right There You Are",
+    "definitions": [
+      "Bạn ở ngay đó / Chính nó đó",
+      "You've been looking for the bug, and _____ _____ ___ ___!",
+      "I was looking for my keys, and _____ _____ ___ ___."
+    ]
+  },
+  {
+    "word": "Overwhelmed",
+    "definitions": [
+      "Bị choáng ngợp",
+      "It's easy to feel ___________ when you see this giant list of words.",
+      "Don't get ___________; just learn one word at a time."
+    ]
+  },
+  {
+    "word": "Overfit",
+    "definitions": [
+      "Quá khớp / Học vẹt",
+      "Your model is 100% on training data but 50% on test data? It's starting to _______.",
+      "Regularization is a technique to prevent a model from `_______`ting."
+    ]
+  },
+  {
+    "word": "Every Once in a While",
+    "definitions": [
+      "Thỉnh thoảng / Lâu lâu một lần",
+      "You should retrain your model _____ ____ __ _ _____, but not every day.",
+      "It's okay to take a break _____ ____ __ _ _____."
+    ]
+  },
+  {
+    "word": "All the Lectures",
+    "definitions": [
+      "Tất cả các bài giảng",
+      "He binge-watched ___ ___ ________ in one weekend.",
+      "Did you understand ___ ___ ________?"
+    ]
+  },
+  {
+    "word": "Dive Deep",
+    "definitions": [
+      "Lặn sâu / Tìm hiểu kỹ",
+      "Today we will ____ ____ into how neural networks actually work.",
+      "Your plan requires you to ____ ____ into both English and ML."
+    ]
+  },
+  {
+    "word": "Survive",
+    "definitions": [
+      "Sống sót",
+      "If you can _______ this difficult course, you can do anything.",
+      "The company is struggling to _______."
     ]
   }
 ]
