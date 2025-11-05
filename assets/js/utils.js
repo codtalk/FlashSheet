@@ -276,3 +276,73 @@ window.LE = {
   fetchSheetCSV,
   appendRowsToSheet,
 };
+
+// --- Optional: Web Speech (Text-to-Speech) helpers ---
+(function(){
+  const hasTTS = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+  let voices = [];
+  let ready = false;
+  function loadVoices(){
+    try{
+      voices = window.speechSynthesis?.getVoices?.() || [];
+      ready = true;
+    }catch{}
+  }
+  if (hasTTS){
+    loadVoices();
+    window.speechSynthesis?.addEventListener?.('voiceschanged', loadVoices);
+  }
+
+  function pickVoice(lang){
+    if (!hasTTS) return null;
+    const lc = (lang||'').toLowerCase();
+    // prefer exact match
+    let v = voices.find(v=> (v.lang||'').toLowerCase() === lc);
+    if (v) return v;
+    // prefer language prefix
+    const prefix = lc.split('-')[0];
+    v = voices.find(v=> (v.lang||'').toLowerCase().startsWith(prefix));
+    if (v) return v;
+    // any default
+    return voices[0] || null;
+  }
+
+  function speak(text, { lang='en-US', rate=1, pitch=1, volume=1 }={}){
+    if (!hasTTS) return Promise.resolve(false);
+    return new Promise(resolve => {
+      const t = (text||'').toString().trim();
+      if (!t){ resolve(false); return; }
+      const u = new SpeechSynthesisUtterance(t);
+      u.lang = lang; u.rate = rate; u.pitch = pitch; u.volume = volume;
+      const v = pickVoice(lang); if (v) u.voice = v;
+      u.onend = () => resolve(true);
+      u.onerror = () => resolve(false);
+      try{ window.speechSynthesis.cancel(); }catch{}
+      try{ window.speechSynthesis.speak(u); }catch{ resolve(false); }
+    });
+  }
+
+  function chainSpeak(parts){
+    // parts: Array<{text, lang, rate?, pitch?, volume?}>
+    const run = async()=>{
+      for (const p of parts){
+        if (!p || !p.text) continue;
+        // small gap between utterances
+        // eslint-disable-next-line no-await-in-loop
+        await speak(p.text, p);
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise(r=>setTimeout(r, 150));
+      }
+      return true;
+    };
+    return run();
+  }
+
+  window.LE = Object.assign({}, window.LE, {
+    tts: {
+      supported: () => !!hasTTS,
+      speak,
+      chainSpeak,
+    }
+  });
+})();

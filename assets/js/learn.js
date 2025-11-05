@@ -19,6 +19,11 @@
   const sheetModal = document.getElementById('sheetModal');
   const btnGoSheetCfg = document.getElementById('btnGoSheetCfg');
   const btnModalClose = document.getElementById('btnModalClose');
+  const toggleTTS = document.getElementById('toggleTTS');
+  const toggleTrans = document.getElementById('toggleTrans');
+  const postAnswer = document.getElementById('postAnswer');
+  const translationBox = document.getElementById('translation');
+  const btnReplayTTS = document.getElementById('btnReplayTTS');
 
   let dataset = [];
   let queue = []; // array of indices
@@ -34,6 +39,9 @@
   const FEEDBACK_USER_KEY = 'fs_feedback_user';
   let lastDef = '';
   const SHEET_PROMPT_KEY = 'fs_sheet_prompt_date';
+  const AUTO_TTS_KEY = 'fs_auto_tts';
+  const AUTO_TRANS_KEY = 'fs_auto_trans';
+  let lastSpeakParts = [];
 
   function loadProgress(){
     try{ progress = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}') || {}; }
@@ -67,6 +75,9 @@
     feedback.textContent = '';
     card.classList.remove('correct','wrong');
     answered = false;
+    // reset post-answer area
+    if (postAnswer){ postAnswer.hidden = true; }
+    if (translationBox){ translationBox.innerHTML = ''; }
   }
 
   function renderAnswerUI(index){
@@ -170,6 +181,73 @@
     answerArea.querySelectorAll('input,button.choice,.btn.primary').forEach(el => {
       el.disabled = true;
     });
+
+    // Post-answer: read aloud and show translation
+    try{ doPostAnswer(item, ok); }catch{}
+  }
+
+  function containsVietnamese(text){
+    // basic check for Vietnamese diacritics
+    return /[ăâđêôơưÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬáàảãạắằẳẵặấầẩẫậĐđÉÈẺẼẸÊẾỀỂỄỆéèẻẽẹếềểễệÍÌỈĨỊíìỉĩịÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢóòỏõọốồổỗộớờởỡợÚÙỦŨỤƯỨỪỬỮỰúùủũụứừửữựÝỲỶỸỴýỳỷỹỵ]/.test((text||''));
+  }
+
+  function getPreferredTranslation(item){
+    const defs = Array.isArray(item.definitions) ? item.definitions : [];
+    if (!defs.length) return '';
+    // Prefer: first def that looks Vietnamese
+    const vn = defs.find(d => containsVietnamese(d));
+    if (vn) return vn;
+    // Next: the first definition if it's not a cloze with ____
+    const firstNonCloze = defs.find(d => !/_{2,}/.test(d));
+    return firstNonCloze || defs[0];
+  }
+
+  function renderPostAnswer(item){
+    if (!postAnswer) return;
+    const showTrans = !!(toggleTrans?.checked);
+    const trans = getPreferredTranslation(item);
+    let shown = false;
+    if (translationBox){
+      if (showTrans && trans){
+        translationBox.innerHTML = `
+          <div class="translation-row"><span class="muted">Từ:</span> <strong>${item.word}</strong></div>
+          <div class="translation-row"><span class="muted">Dịch:</span> <span>${trans}</span></div>
+          <div class="translation-links">
+            <a class="nav-btn secondary" target="_blank" rel="noopener" href="https://translate.google.com/?sl=en&tl=vi&text=${encodeURIComponent(item.word)}&op=translate">Dịch trên Google</a>
+            <a class="nav-btn secondary" target="_blank" rel="noopener" href="https://youglish.com/search/${encodeURIComponent(item.word)}/english">Phát âm (YouGlish)</a>
+          </div>`;
+        shown = true;
+      } else {
+        translationBox.innerHTML = '';
+      }
+    }
+    postAnswer.hidden = !shown && !(btnReplayTTS && !btnReplayTTS.disabled);
+  }
+
+  function doPostAnswer(item, ok){
+    // Build speak parts
+    lastSpeakParts = [];
+    if (item && item.word){
+      lastSpeakParts.push({ text: item.word, lang: 'en-US', rate: 0.95 });
+    }
+    const trans = getPreferredTranslation(item);
+    if (trans){
+      lastSpeakParts.push({ text: trans, lang: 'vi-VN', rate: 1 });
+    }
+
+    // Render UI
+    renderPostAnswer(item);
+
+    // Auto TTS if enabled and supported
+    const canSpeak = !!(window.LE && LE.tts && LE.tts.supported && LE.tts.supported());
+    if (btnReplayTTS){ btnReplayTTS.disabled = !canSpeak; }
+    if (canSpeak && toggleTTS?.checked && lastSpeakParts.length){
+      // fire and forget
+      LE.tts.chainSpeak(lastSpeakParts);
+    }
+    if (postAnswer && (!postAnswer.hidden)){
+      // nothing else
+    }
   }
 
   function computeWeights(){
@@ -283,6 +361,31 @@
 
   async function init(){
     loadProgress();
+    // Load toggles from localStorage
+    try{
+      const tts = localStorage.getItem(AUTO_TTS_KEY); if (toggleTTS && tts !== null) toggleTTS.checked = tts === '1';
+      const trn = localStorage.getItem(AUTO_TRANS_KEY); if (toggleTrans && trn !== null) toggleTrans.checked = trn === '1';
+    }catch{}
+    // Feature availability: TTS
+    const ttsSupported = !!(window.LE && LE.tts && LE.tts.supported && LE.tts.supported());
+    if (btnReplayTTS){ btnReplayTTS.disabled = !ttsSupported; }
+    if (toggleTTS && !ttsSupported){
+      toggleTTS.checked = false;
+      toggleTTS.disabled = true;
+      toggleTTS.parentElement?.setAttribute('title','Trình duyệt không hỗ trợ đọc to');
+    }
+    // Persist toggles
+    toggleTTS?.addEventListener('change', ()=>{
+      try{ localStorage.setItem(AUTO_TTS_KEY, toggleTTS.checked ? '1':'0'); }catch{}
+    });
+    toggleTrans?.addEventListener('change', ()=>{
+      try{ localStorage.setItem(AUTO_TRANS_KEY, toggleTrans.checked ? '1':'0'); }catch{}
+      // re-render post answer for current item if answered
+      if (answered && current >= 0) renderPostAnswer(dataset[current]);
+    });
+    btnReplayTTS?.addEventListener('click', ()=>{
+      if (LE && LE.tts && lastSpeakParts.length) LE.tts.chainSpeak(lastSpeakParts);
+    });
     // load stored feedback user name if any
     try{
       const savedName = localStorage.getItem(FEEDBACK_USER_KEY) || '';

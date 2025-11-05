@@ -36,6 +36,8 @@
         <button id="btnShuffle" class="btn">Trộn câu hỏi</button>
         
         <button id="btnResetProgress" class="btn outline" title="Xoá tiến độ học (thống kê & lặp lại)">Reset tiến độ</button>
+        <label class="toggle"><input type="checkbox" id="toggleTTS" checked> Tự động đọc</label>
+        <label class="toggle"><input type="checkbox" id="toggleTrans" checked> Hiện dịch</label>
       </div>
     </section>
 
@@ -50,6 +52,12 @@
           <!-- dynamic: input or multiple-choice buttons -->
         </div>
         <div id="feedback" class="feedback" aria-live="polite"></div>
+        <div id="postAnswer" class="post-answer" aria-live="polite" hidden>
+          <div class="post-row">
+            <button id="btnReplayTTS" class="btn small secondary" title="Nghe lại" aria-label="Nghe lại">🔈 Nghe lại</button>
+          </div>
+          <div id="translation" class="translation"></div>
+        </div>
         <div class="card-footer">
           <button id="btnNext" class="btn primary">Câu tiếp</button>
         </div>
