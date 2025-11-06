@@ -3,22 +3,33 @@
 Ứng dụng web đơn giản giúp học từ vựng tiếng Anh qua flashcard, chỉ dùng HTML/CSS/JS thuần.
 
 ## Tính năng
-- 2 trang:
-  - `index.html`: Trang học (flashcard). Chế độ nhập đáp án, trắc nghiệm, hoặc trộn; câu hỏi ngẫu nhiên; hiệu ứng khi trả lời đúng (confetti, glow). Theo dõi số câu đúng/sai.
-  - `admin.html`: Trang nhập dữ liệu. Thêm nhiều mô tả (định nghĩa) cho một từ, nhập/xuất JSON, lưu Local Storage.
+- 3 trang chính:
+  - `study.html`: Tab "Học từ" — Xem flash card 2 mặt. Mặt trước: từ + các định nghĩa (và hình nếu có). Mặt sau: dịch và giải thích (ví dụ). Nhấp để lật; dùng Trước/Sau để chuyển thẻ; có nút Trộn thứ tự.
+  - `index.html`: Tab "Luyện tập" — Ôn tập với chế độ nhập đáp án, trắc nghiệm, hoặc trộn; câu hỏi ngẫu nhiên; hiệu ứng khi trả lời đúng (confetti, glow). Theo dõi số câu đúng/sai.
+  - `admin.html`: Tab "Nhập dữ liệu" — Thêm nhiều mô tả (định nghĩa) cho một từ, đồng bộ Google Sheet.
 - Dữ liệu lưu:
   - Ưu tiên Local Storage trình duyệt (không cần server).
   - Có thể nhập file JSON (đặt vào thư mục `data/vocab.json`) hoặc dùng nút tải JSON.
 - Thiết kế giao diện hiện đại, dễ nhìn, có animation nhỏ.
+ - Âm thanh phản hồi: phát ngẫu nhiên một âm từ thư mục `sounds/trues/` (đúng) hoặc `sounds/falses/` (sai).
+ - TTS (đọc to): chỉ đọc từ/câu tiếng Anh, không đọc phần dịch tiếng Việt.
+ - TTS:
+   - Nút “🔈 Nghe lại”: chỉ đọc lại từ đáp án (tiếng Anh), không đọc câu.
+   - Nút “🌐 Dịch & đọc câu”: ghép đáp án vào câu hỏi tiếng Anh, đọc nguyên câu và (nếu cấu hình) dịch câu ngay trong trang.
+- Nút “🌐 Dịch & đọc câu”: sau khi trả lời, nếu câu hỏi là tiếng Anh, bấm để app tự chèn đáp án vào chỗ trống, đọc nguyên câu và hiển thị phần dịch tham khảo ngay trong trang (không chuyển trang).
+ - Dịch câu đầy đủ: nếu cấu hình thêm “Apps Script Translate URL”, app sẽ dịch máy cả câu đầy đủ và hiển thị trực tiếp dưới phần trả lời.
 
 ## Cấu trúc
 ```
 learnEnglish/
-├─ index.html        # Trang học
-├─ admin.html        # Trang nhập liệu
+├─ study.html        # Tab Học từ (flashcard lật)
+├─ index.html        # Tab Luyện tập (quiz)
+├─ admin.html        # Tab Nhập liệu & Đồng bộ
+├─ feedback.html     # Tab Góp ý (chỉ-đọc)
+├─ guide.html        # Tab Hướng dẫn
 ├─ assets/
 │  ├─ css/styles.css
-│  └─ js/{utils.js, admin.js, learn.js}
+│  └─ js/{utils.js, admin.js, learn.js, study.js}
 └─ data/vocab.json   # Dữ liệu mẫu
 ```
 
@@ -33,6 +44,8 @@ python3 -m http.server 8000
 ```
 
 Hoặc dùng bất kỳ server tĩnh nào bạn quen dùng.
+
+Lưu ý: Trình duyệt có thể yêu cầu tương tác người dùng trước khi cho phép phát âm thanh/TTS. Hãy click một nút bất kỳ trên trang trước.
 
 ## Định dạng dữ liệu
 ```json
@@ -57,7 +70,8 @@ apple,A round fruit,Quả táo
 ## Gợi ý sử dụng
 - Vào `admin.html` để thêm/sửa bộ từ (mặc định lưu Local Storage nếu chưa cấu hình Sheet).
 - Dùng "Đồng bộ (Sheet ↔ Local)" để tải từ Sheet về (hợp nhất) và đẩy các mục mới từ Local lên Sheet (không xoá dữ liệu ở hai phía).
-- Trên `index.html` có thể bấm "Tải từ Sheet" để nạp ngay dữ liệu mới.
+- Trên `index.html` (Luyện tập) có thể bấm "Tải từ Sheet" để nạp ngay dữ liệu mới.
+- Trên `study.html` (Học từ), nhấp vào thẻ để lật, dùng nút Trước/Sau để chuyển thẻ; bấm Trộn để xáo thứ tự.
 
 ## Đồng bộ giữa các thiết bị (Google Sheet)
 
@@ -152,6 +166,35 @@ Nếu trả 200/ok thì Web App nhận tốt.
 ## Ghi chú
 - Nút "Lưu vào thư mục data" dùng File System Access API (Chrome/Edge). Safari hiện chưa hỗ trợ.
 - Nếu bạn muốn dùng Excel, hãy xuất ra CSV rồi dùng công cụ chuyển thành JSON theo định dạng trên.
+
+### Tuỳ biến âm thanh phản hồi
+- Thêm/xoá file trong `sounds/trues/` (âm đúng) hoặc `sounds/falses/` (âm sai). Ứng dụng sẽ chọn ngẫu nhiên mỗi lần trả lời.
+- Hỗ trợ .mp3/.wav phổ biến. Nếu muốn tắt âm, hãy tắt âm lượng tab trình duyệt hoặc chỉnh hệ thống.
+
+### Dịch câu đầy đủ (tuỳ chọn, online)
+Bạn có thể dùng Apps Script để cung cấp endpoint dịch máy đơn giản (EN→VI). Thêm URL đó vào `admin.html` → “Apps Script Translate URL”.
+
+Mẫu Apps Script (Code.gs):
+```javascript
+function doPost(e){
+  try{
+    var text = e.parameter && e.parameter.text || '';
+    var sl = e.parameter && e.parameter.sl || 'en';
+    var tl = e.parameter && e.parameter.tl || 'vi';
+    if (!text) return ContentService.createTextOutput(JSON.stringify({ ok:false, error:'Missing text' })).setMimeType(ContentService.MimeType.JSON);
+    // Yêu cầu bật Advanced Service: Google Cloud Translation API (hoặc dùng LanguageApp.translate đơn giản)
+    var out = LanguageApp.translate(text, sl, tl);
+    return ContentService.createTextOutput(JSON.stringify({ ok:true, text: out }))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader('Access-Control-Allow-Origin','*');
+  }catch(err){
+    return ContentService.createTextOutput(JSON.stringify({ ok:false, error:String(err) }))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader('Access-Control-Allow-Origin','*');
+  }
+}
+```
+Triển khai: Deploy → New deployment → Type: Web app → Execute as: Me → Who has access: Anyone → Deploy. Dán URL vào ô tương ứng. Lưu ý: API này là online; nếu không cấu hình, app sẽ không dịch máy câu đầy đủ mà chỉ hiển thị “Đang dịch…” rồi “(Không dịch được)”.
 
 Tính năng bổ xung sau:
 - Tích hợp ai đọc từ; cụm;

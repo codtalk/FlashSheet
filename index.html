@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FlashSheet — Học từ vựng</title>
+  <title>FlashSheet — Luyện tập</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -14,7 +14,8 @@
   <header class="app-header">
     <a class="brand" href="index.html" aria-label="Trang chủ">FlashSheet</a>
     <nav class="nav">
-      <a href="index.html" class="nav-btn" aria-current="page">Học từ vựng</a>
+      <a href="study.html" class="nav-btn">Học từ</a>
+      <a href="index.html" class="nav-btn" aria-current="page">Luyện tập</a>
       <a href="admin.html" class="nav-btn">Nhập dữ liệu</a>
       <a href="feedback.html" class="nav-btn">Góp ý</a>
       <a href="guide.html" class="nav-btn secondary">Hướng dẫn</a>
@@ -55,6 +56,7 @@
         <div id="postAnswer" class="post-answer" aria-live="polite" hidden>
           <div class="post-row">
             <button id="btnReplayTTS" class="btn small secondary" title="Nghe lại" aria-label="Nghe lại">🔈 Nghe lại</button>
+            <button id="btnTransReadSentence" class="btn small" title="Dịch & đọc nguyên câu tiếng Anh" aria-label="Dịch & đọc câu" hidden>🌐 Dịch & đọc câu</button>
           </div>
           <div id="translation" class="translation"></div>
         </div>

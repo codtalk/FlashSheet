@@ -317,8 +317,13 @@ window.LE = {
       const v = pickVoice(lang); if (v) u.voice = v;
       u.onend = () => resolve(true);
       u.onerror = () => resolve(false);
+      // Cancel any ongoing utterances, then speak after a microtask to avoid race conditions in some browsers
       try{ window.speechSynthesis.cancel(); }catch{}
-      try{ window.speechSynthesis.speak(u); }catch{ resolve(false); }
+      try{
+        setTimeout(() => {
+          try{ window.speechSynthesis.speak(u); }catch(e){ resolve(false); }
+        }, 0);
+      }catch{ resolve(false); }
     });
   }
 
@@ -345,4 +350,95 @@ window.LE = {
       chainSpeak,
     }
   });
+})();
+
+// --- Sound effects (SFX) for correct/incorrect answers ---
+(function(){
+  // Static manifest of bundled sounds
+  const TRUE_SOUNDS = [
+    'sounds/trues/Am_thanh_Dung_roi_ban_gioi_qua-www_tiengdong_com.mp3',
+    'sounds/trues/Am_thanh_lua_chon_Dung-www_tiengdong_com.mp3',
+    'sounds/trues/Am_thanh_tra_loi_Dung_chinh_xac-www_tiengdong_com.mp3',
+    'sounds/trues/correct_sound_effect-www_tiengdong_com.mp3',
+    'sounds/trues/tieng_noi_chuc_mung_giong_nam-www_tiengdong_com.mp3',
+    'sounds/trues/tieng_noi_chuc_mung_giong_nu-www_tiengdong_com.mp3'
+  ];
+  const FALSE_SOUNDS = [
+    'sounds/falses/Am_thanh_ban_tra_loi_sai_roi-www_tiengdong_com.mp3',
+    'sounds/falses/Am_thanh_khi_chon_nham-www_tiengdong_com.mp3',
+    'sounds/falses/Am_thanh_that_vong-www_tiengdong_com.mp3',
+    'sounds/falses/Am_thanh_that_vong_phim_hoat_hinh_de_thuong-www_tiengdong_com.mp3',
+    'sounds/falses/Am_thanh_tra_loi_sai_wav-www_tiengdong_com.wav',
+    'sounds/falses/buzzer_wrong_answer_gaming_sound_effect-www_tiengdong_com.mp3',
+    'sounds/falses/nhac_tra_loi_sai-www_tiengdong_com.mp3'
+  ];
+
+  let currentAudio = null;
+
+  function pick(arr){
+    if (!arr || !arr.length) return null;
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function stop(){
+    try{
+      if (currentAudio){
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+      }
+    }catch{}
+    currentAudio = null;
+  }
+
+  function play(type){
+    const list = (type === 'true' || type === true || type === 'correct') ? TRUE_SOUNDS : FALSE_SOUNDS;
+    const src = pick(list);
+    if (!src) return Promise.resolve(false);
+    stop();
+    return new Promise((resolve) => {
+      const a = new Audio(src);
+      currentAudio = a;
+      a.volume = 0.8;
+      a.onended = () => { if (currentAudio === a) currentAudio = null; resolve(true); };
+      a.onerror = () => { if (currentAudio === a) currentAudio = null; resolve(false); };
+      try { a.play().catch(()=>resolve(false)); } catch { resolve(false); }
+    });
+  }
+
+  function preload(){
+    // light preload: create Audio objects but don't autoplay
+    [...TRUE_SOUNDS, ...FALSE_SOUNDS].forEach(src => {
+      const a = new Audio(); a.src = src; a.preload = 'auto';
+    });
+  }
+
+  function isPlaying(){ return !!currentAudio && !currentAudio.paused; }
+
+  window.LE = Object.assign({}, window.LE, {
+    sfx: { play, preload, stop, isPlaying }
+  });
+})();
+
+// --- Optional: Translation helper (via configurable Apps Script) ---
+(function(){
+  async function translate(text, sl='en', tl='vi'){
+    const cfg = (window.LE && LE.loadSheetConfig && LE.loadSheetConfig()) || {};
+    const url = cfg.translateUrl;
+    const t = (text||'').toString().trim();
+    if (!url || !t) return '';
+    const body = `text=${encodeURIComponent(t)}&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}`;
+    try{
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body,
+      });
+      if (!resp.ok) return '';
+      const data = await resp.json().catch(()=>null);
+      if (data && typeof data.text === 'string') return data.text;
+      return '';
+    }catch(e){ return ''; }
+  }
+
+  window.LE = Object.assign({}, window.LE, { translate });
 })();

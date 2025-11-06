@@ -24,6 +24,7 @@
   const postAnswer = document.getElementById('postAnswer');
   const translationBox = document.getElementById('translation');
   const btnReplayTTS = document.getElementById('btnReplayTTS');
+  const btnTransReadSentence = document.getElementById('btnTransReadSentence');
 
   let dataset = [];
   let queue = []; // array of indices
@@ -42,6 +43,7 @@
   const AUTO_TTS_KEY = 'fs_auto_tts';
   const AUTO_TRANS_KEY = 'fs_auto_trans';
   let lastSpeakParts = [];
+  let lastSfxPromise = Promise.resolve();
 
   function loadProgress(){
     try{ progress = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}') || {}; }
@@ -182,6 +184,13 @@
       el.disabled = true;
     });
 
+    // Play SFX feedback
+    try{
+      if (window.LE && LE.sfx && LE.sfx.play){
+        lastSfxPromise = LE.sfx.play(ok ? 'true' : 'false');
+      }
+    }catch{}
+
     // Post-answer: read aloud and show translation
     try{ doPostAnswer(item, ok); }catch{}
   }
@@ -189,6 +198,24 @@
   function containsVietnamese(text){
     // basic check for Vietnamese diacritics
     return /[ăâđêôơưÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬáàảãạắằẳẵặấầẩẫậĐđÉÈẺẼẸÊẾỀỂỄỆéèẻẽẹếềểễệÍÌỈĨỊíìỉĩịÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢóòỏõọốồổỗộớờởỡợÚÙỦŨỤƯỨỪỬỮỰúùủũụứừửữựÝỲỶỸỴýỳỷỹỵ]/.test((text||''));
+  }
+
+  function isEnglish(text){
+    const t = (text||'').toString();
+    return !containsVietnamese(t) && /[A-Za-z]/.test(t);
+  }
+
+  function buildFilledSentence(item){
+    const q = (lastDef || '').toString();
+    if (!q || !isEnglish(q)) return '';
+    const w = (item && item.word) ? String(item.word) : '';
+    if (!w) return q;
+    // Replace common cloze patterns with the answer
+    let s = q;
+    s = s.replace(/_{2,}/g, w);        // ____ or ___
+    s = s.replace(/\{\{?\s*word\s*\}?\}/gi, w); // {{word}} or {word}
+    s = s.replace(/\[\s*word\s*\]/gi, w);        // [word]
+    return s;
   }
 
   function getPreferredTranslation(item){
@@ -207,6 +234,14 @@
     const showTrans = !!(toggleTrans?.checked);
     const trans = getPreferredTranslation(item);
     let shown = false;
+    // Determine availability of sentence-read button
+    const ttsSupported = !!(window.LE && LE.tts && LE.tts.supported && LE.tts.supported());
+    const englishQ = isEnglish(lastDef);
+    const canSentence = !!(btnTransReadSentence && ttsSupported && englishQ);
+    if (btnTransReadSentence){
+      btnTransReadSentence.hidden = !canSentence;
+      btnTransReadSentence.disabled = !canSentence;
+    }
     if (translationBox){
       if (showTrans && trans){
         translationBox.innerHTML = `
@@ -221,19 +256,16 @@
         translationBox.innerHTML = '';
       }
     }
-    postAnswer.hidden = !shown && !(btnReplayTTS && !btnReplayTTS.disabled);
+    postAnswer.hidden = !shown && !(btnReplayTTS && !btnReplayTTS.disabled) && !canSentence;
   }
 
-  function doPostAnswer(item, ok){
+  async function doPostAnswer(item, ok){
     // Build speak parts
     lastSpeakParts = [];
     if (item && item.word){
       lastSpeakParts.push({ text: item.word, lang: 'en-US', rate: 0.95 });
     }
-    const trans = getPreferredTranslation(item);
-    if (trans){
-      lastSpeakParts.push({ text: trans, lang: 'vi-VN', rate: 1 });
-    }
+    // Do NOT read Vietnamese translation
 
     // Render UI
     renderPostAnswer(item);
@@ -242,7 +274,8 @@
     const canSpeak = !!(window.LE && LE.tts && LE.tts.supported && LE.tts.supported());
     if (btnReplayTTS){ btnReplayTTS.disabled = !canSpeak; }
     if (canSpeak && toggleTTS?.checked && lastSpeakParts.length){
-      // fire and forget
+      // Wait for SFX to finish (best-effort) then speak English only
+      try{ await lastSfxPromise; }catch{}
       LE.tts.chainSpeak(lastSpeakParts);
     }
     if (postAnswer && (!postAnswer.hidden)){
@@ -374,6 +407,8 @@
       toggleTTS.disabled = true;
       toggleTTS.parentElement?.setAttribute('title','Trình duyệt không hỗ trợ đọc to');
     }
+    // Preload sound effects for snappy feedback
+    try{ if (LE && LE.sfx && LE.sfx.preload) LE.sfx.preload(); }catch{}
     // Persist toggles
     toggleTTS?.addEventListener('change', ()=>{
       try{ localStorage.setItem(AUTO_TTS_KEY, toggleTTS.checked ? '1':'0'); }catch{}
@@ -383,8 +418,65 @@
       // re-render post answer for current item if answered
       if (answered && current >= 0) renderPostAnswer(dataset[current]);
     });
-    btnReplayTTS?.addEventListener('click', ()=>{
-      if (LE && LE.tts && lastSpeakParts.length) LE.tts.chainSpeak(lastSpeakParts);
+    btnReplayTTS?.addEventListener('click', async ()=>{
+      try{
+        if (!(LE && LE.tts && LE.tts.supported && LE.tts.supported())) return;
+        const item = (current >= 0 && dataset[current]) ? dataset[current] : null;
+        const word = (item && item.word) ? String(item.word).trim() : '';
+        if (!word) return;
+        try{ await lastSfxPromise; }catch{}
+        LE.tts.chainSpeak([{ text: word, lang: 'en-US', rate: 0.95 }]);
+      }catch{}
+    });
+    btnTransReadSentence?.addEventListener('click', async ()=>{
+      try{
+        const item = (current >= 0 && dataset[current]) ? dataset[current] : null;
+        const sentence = buildFilledSentence(item).trim();
+        if (!sentence || !isEnglish(sentence)) return;
+        // Wait for SFX to finish then speak the full English sentence
+        try{ await lastSfxPromise; }catch{}
+        if (LE && LE.tts && LE.tts.supported && LE.tts.supported()){
+          await LE.tts.speak(sentence, { lang:'en-US', rate: 0.98 });
+        }
+        // Inline display: full sentence and translation
+        if (translationBox){
+          const showTrans = !!(toggleTrans?.checked);
+          const transRef = getPreferredTranslation(item);
+          // Avoid duplicating the full sentence row by tagging it
+          const markerAttr = 'data-full-sentence';
+          const transMarkerAttr = 'data-full-sentence-trans';
+          const hasRow = translationBox.querySelector(`[${markerAttr}="1"]`);
+          const parts = [];
+          parts.push(`<div class=\"translation-row\" ${markerAttr}=\"1\"><span class=\"muted\">Câu đầy đủ:</span> <span>${sentence}</span></div>`);
+          // Placeholder row for sentence translation (will update below)
+          if (showTrans){
+            parts.push(`<div class=\"translation-row\" ${transMarkerAttr}=\"1\"><span class=\"muted\">Dịch câu:</span> <span>Đang dịch…</span></div>`);
+          }
+          // Also keep reference word translation if any
+          if (showTrans && transRef){
+            parts.push(`<div class=\"translation-row\"><span class=\"muted\">Dịch (tham khảo từ):</span> <span>${transRef}</span></div>`);
+          }
+          if (hasRow){
+            // Replace existing full-sentence block
+            // Simple approach: rebuild content keeping existing links if any
+            const links = translationBox.querySelector('.translation-links');
+            const linksHTML = links ? links.outerHTML : '';
+            translationBox.innerHTML = `${parts.join('')}${linksHTML}`;
+          } else {
+            // Append below any existing content
+            translationBox.innerHTML = `${parts.join('')}${translationBox.innerHTML}`;
+          }
+          if (postAnswer){ postAnswer.hidden = false; }
+          // Try live translation via LE.translate if configured
+          if (showTrans && window.LE && LE.translate){
+            try{
+              const vi = await LE.translate(sentence, 'en', 'vi');
+              const row = translationBox.querySelector(`[${transMarkerAttr}=\"1\"] span:last-child`);
+              if (row){ row.textContent = vi || '(Không dịch được)'; }
+            }catch{}
+          }
+        }
+      }catch{}
     });
     // load stored feedback user name if any
     try{

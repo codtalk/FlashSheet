@@ -136,6 +136,79 @@ textarea.answer-input{min-height:96px; resize:vertical; line-height:1.4}
 /* Confetti canvas */
 .confetti-canvas{position:absolute; inset:0; pointer-events:none}
 
+/* Flip-card (Study) */
+.flip-wrap{perspective:1200px; max-width:840px; margin:0 auto; display:grid; place-items:center}
+.flip-card{
+  position:relative; width:100%; min-height:360px; max-width:760px;
+  border-radius:18px; box-shadow:0 16px 40px var(--shadow);
+  transform-style:preserve-3d; transition:transform .55s ease, box-shadow .2s;
+  cursor:pointer; outline:none; border:1px solid rgba(255,255,255,0.06);
+}
+.flip-card:focus-visible{box-shadow:0 0 0 3px rgba(6,182,212,0.35), 0 16px 40px var(--shadow)}
+.flip-card.is-flipped{transform:rotateY(180deg)}
+.flip-face{
+  position:absolute; inset:0; border-radius:18px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0) 20%),
+    var(--card);
+  padding:22px; backface-visibility:hidden; display:flex; flex-direction:column;
+}
+.flip-face::after{
+  content:""; position:absolute; inset:0; pointer-events:none; border-radius:18px;
+  border:1px solid rgba(255,255,255,0.06);
+}
+.flip-back{transform:rotateY(180deg)}
+.fc-header{display:flex; justify-content:space-between; align-items:center}
+.fc-word{font-size:32px; font-weight:800; margin:10px 0 8px; letter-spacing:.2px}
+.fc-image{margin:6px 0 8px}
+.fc-image img{max-width:100%; border-radius:12px; display:block}
+.fc-defs{margin:8px 0 0; padding-left:18px}
+.fc-defs li{margin:6px 0}
+.fc-meaning{font-size:18px; margin:8px 0}
+.fc-explain{margin-top:8px}
+.fc-ex-list{margin:8px 0 0; padding-left:18px}
+.fc-hint{margin-top:auto; font-size:12px; color:var(--muted)}
+.fc-actions{display:flex; gap:8px; align-items:center; margin:6px 0 2px}
+
+/* Contrast theme for card to stand out */
+.flip-card.theme-contrast{ border-color: rgba(255,255,255,0.0); }
+.flip-card.theme-contrast .flip-face{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.88));
+  color:#0f172a;
+}
+.flip-card.theme-contrast .flip-face::after{ border-color: rgba(0,0,0,0.06); }
+.flip-card.theme-contrast .badge{ background:rgba(6,182,212,0.16); color:#0f172a; border-color:rgba(6,182,212,0.35) }
+.flip-card.theme-contrast .q-index{ color:#475569 }
+.flip-card.theme-contrast .muted{ color:#64748b }
+.flip-card.theme-contrast .fc-image img{ box-shadow: 0 8px 24px rgba(0,0,0,0.12) }
+
+/* Fullscreen mode (modal-like) */
+.flip-card.fullscreen{
+  position:fixed; left:50%; top:50%; transform:translate(-50%, -50%) rotateY(0deg);
+  width:min(920px, 92vw); min-height:420px; max-height: 86vh; z-index:1100;
+}
+.flip-card.fullscreen.is-flipped{ transform:translate(-50%, -50%) rotateY(180deg) }
+.modal-backdrop.fs-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.5); backdrop-filter:blur(2px); z-index:1099 }
+
+/* Slider overlay buttons */
+.slide-btn{
+  position:absolute; top:50%; transform:translateY(-50%);
+  width:42px; height:42px; border-radius:999px; border:1px solid rgba(0,0,0,0.12);
+  background:rgba(255,255,255,0.85); color:#0f172a; cursor:pointer;
+  box-shadow:0 6px 20px rgba(0,0,0,0.2); display:grid; place-items:center;
+}
+.slide-btn:hover{ filter:brightness(1.05) }
+.slide-prev{ left: -18px }
+.slide-next{ right: -18px }
+@media (max-width: 640px){
+  .slide-prev{ left: -6px } .slide-next{ right: -6px }
+}
+
+/* Simple fade when changing card */
+.flip-card.fading .flip-face{ animation: fadeInQuick .18s ease both }
+@keyframes fadeInQuick{ from{ opacity:0 } to{ opacity:1 } }
+
 /* Responsive */
 @media (max-width: 640px){
   .app-header, .app-footer{padding:12px 14px}
