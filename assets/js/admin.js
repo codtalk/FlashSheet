@@ -15,6 +15,7 @@
   const sheetAutoOnLearnEl = document.getElementById('sheetAutoOnLearn');
   const sheetRefreshSecEl = document.getElementById('sheetRefreshSec');
   const sheetTranslateUrlEl = document.getElementById('sheetTranslateUrl');
+  const sheetTtsUrlEl = document.getElementById('sheetTtsUrl');
   const btnSheetLoad = document.getElementById('btnSheetLoad');
   const btnSheetSaveCfg = document.getElementById('btnSheetSaveCfg');
   const btnUseThienPreset = document.getElementById('btnUseThienPreset');
@@ -78,6 +79,7 @@
     if (sheetCsvUrlEl) sheetCsvUrlEl.value = sheetCfg.csvUrl || '';
     if (sheetWriteUrlEl) sheetWriteUrlEl.value = sheetCfg.writeUrl || '';
     if (sheetTranslateUrlEl) sheetTranslateUrlEl.value = sheetCfg.translateUrl || '';
+    if (sheetTtsUrlEl) sheetTtsUrlEl.value = sheetCfg.ttsUrl || '';
     if (sheetAutoOnLearnEl) sheetAutoOnLearnEl.checked = !!sheetCfg.autoOnLearn;
     if (sheetRefreshSecEl) sheetRefreshSecEl.value = sheetCfg.refreshSec || 120;
   }
@@ -276,6 +278,7 @@
       csvUrl: sheetCsvUrlEl.value.trim(),
       writeUrl: sheetWriteUrlEl.value.trim(),
       translateUrl: sheetTranslateUrlEl.value.trim(),
+      ttsUrl: sheetTtsUrlEl.value.trim(),
       autoOnLearn: !!sheetAutoOnLearnEl.checked,
       refreshSec: Math.max(15, parseInt(sheetRefreshSecEl.value, 10) || 120),
     };

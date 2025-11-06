@@ -22,6 +22,25 @@
   let order = [];
   let cur = 0;
   let touchStartX = null;
+  const logPrefix = '[Study/TTS]';
+
+  function showToast(msg, kind='error'){
+    try{
+      let t = document.querySelector('.toast');
+      if (!t){
+        t = document.createElement('div');
+        t.className = 'toast';
+        document.body.appendChild(t);
+      }
+      t.textContent = String(msg||'');
+      t.classList.remove('success','error');
+      if (kind) t.classList.add(kind);
+      // force reflow then show
+      void t.offsetWidth;
+      t.classList.add('show');
+      setTimeout(()=>{ t && t.classList.remove('show'); }, 2200);
+    }catch{}
+  }
 
   function containsVietnamese(text){
     return /[ăâđêôơưÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬáàảãạắằẳẵặấầẩẫậĐđÉÈẺẼẸÊẾỀỂỄỆéèẻẽẹếềểễệÍÌỈĨỊíìỉĩịÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢóòỏõọốồổỗộớờởỡợÚÙỦŨỤƯỨỪỬỮỰúùủũụứừửữựÝỲỶỸỴýỳỷỹỵ]/.test((text||''));
@@ -189,7 +208,17 @@
     // TTS availability
     try{
       const supported = !!(window.LE && LE.tts && LE.tts.supported && LE.tts.supported());
+      console.debug(logPrefix, 'supported =', supported);
       if (btnSpeakWord){ btnSpeakWord.disabled = !supported; btnSpeakWord.hidden = !supported; }
+      if (supported){
+        try{
+          const voices = window.speechSynthesis?.getVoices?.() || [];
+          console.debug(logPrefix, 'voices =', voices.length, voices.map(v=>v.lang+':'+v.name));
+          if (!voices.length){
+            showToast('TTS bật nhưng chưa tải được giọng đọc. Hãy mở bằng Chrome/Safari và thử lại sau 1–2 giây.', 'error');
+          }
+        }catch(e){ console.debug(logPrefix, 'voices read error', e); }
+      }
     }catch{}
     order = Array.from({length: dataset.length}, (_,i)=>i);
     cur = order[0] || 0;
@@ -207,12 +236,39 @@
   btnSpeakWord?.addEventListener('click', async (e)=>{
     e.stopPropagation();
     try{
-      if (!(LE && LE.tts && LE.tts.supported && LE.tts.supported())) return;
+      const supported = !!(LE && LE.tts && LE.tts.supported && LE.tts.supported());
+      console.debug(logPrefix, 'click speak, supported =', supported);
+      if (!supported){
+        showToast('Trình duyệt không hỗ trợ đọc to (TTS).', 'error');
+        return;
+      }
+      // try to ensure voices ready before speaking (Chrome đôi khi tải chậm)
+      try{ await (LE.tts.ensureVoices && LE.tts.ensureVoices(4000)); }catch{}
       const item = dataset[cur];
       const word = (item && item.word) ? String(item.word).trim() : '';
       if (!word) return;
-      await LE.tts.speak(word, { lang: 'en-US', rate: 0.95 });
-    }catch{}
+      console.debug(logPrefix, 'speaking:', word);
+      let ok = await LE.tts.speak(word, { lang: 'en-US', rate: 0.95 });
+      console.debug(logPrefix, 'speak result =', ok);
+      if (!ok){
+        // Retry once after a short delay (voices có thể vừa được nạp)
+        try{ await new Promise(r=>setTimeout(r, 800)); }catch{}
+        ok = await LE.tts.speak(word, { lang: 'en-US', rate: 0.95 });
+        console.debug(logPrefix, 'retry speak result =', ok);
+      }
+      if (!ok){
+        // Attempt audio-based fallback only if configured
+        let ok2 = false;
+        try{ ok2 = await (LE.tts.speakViaAudio && LE.tts.speakViaAudio(word, { lang: 'en' })); }catch{}
+        console.debug(logPrefix, 'fallback audio result =', ok2);
+        if (!ok2){
+          showToast('Không phát được âm. Hãy mở bằng Chrome/Safari và/hoặc cấu hình Apps Script TTS URL trong Nhập dữ liệu.', 'error');
+        }
+      }
+    }catch(err){
+      console.error(logPrefix, 'speak error', err);
+      showToast('Lỗi TTS: ' + (err && err.message ? err.message : String(err||'')), 'error');
+    }
   });
   btnSlidePrev?.addEventListener('click', (e)=>{ e.stopPropagation(); move(-1); });
   btnSlideNext?.addEventListener('click', (e)=>{ e.stopPropagation(); move(1); });

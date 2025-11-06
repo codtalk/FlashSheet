@@ -70,6 +70,11 @@
         <input type="url" id="sheetTranslateUrl" class="answer-input" placeholder="https://script.google.com/macros/s/.../exec" />
       </div>
       <div class="form-row">
+        <label for="sheetTtsUrl">Apps Script TTS URL (tuỳ chọn, phát âm qua audio)</label>
+        <input type="url" id="sheetTtsUrl" class="answer-input" placeholder="https://script.google.com/macros/s/.../exec" />
+        <div class="hint">Endpoint nên trả về audio/mp3 khi GET: <code>?text=...&lang=en</code>. Dùng để fallback khi Web Speech bị chặn.</div>
+      </div>
+      <div class="form-row">
         <button type="button" id="btnUseThienPreset" class="btn secondary">Dùng bộ từ của thienpahm (lưu vào storage)</button>
       </div>
       <div class="form-row">

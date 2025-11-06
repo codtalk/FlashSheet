@@ -210,7 +210,14 @@ function saveSheetConfig(cfg){
   localStorage.setItem(SHEET_CFG_KEY, JSON.stringify(cfg||{}));
 }
 function loadSheetConfig(){
-  try{ return JSON.parse(localStorage.getItem(SHEET_CFG_KEY) || '{}'); }catch{ return {}; }
+  const DEFAULT_TRANSLATE_URL = 'https://script.google.com/macros/s/AKfycbwDFUlYoI4ody5Iy0qm1lP6WhkjFj15NnaFaEiNkx9p8ZAT7T67Y-ORJ-vonntOno2wFA/exec';
+  try{
+    const cfg = JSON.parse(localStorage.getItem(SHEET_CFG_KEY) || '{}') || {};
+    // Provide safe defaults without overwriting user's saved values
+    return Object.assign({ translateUrl: DEFAULT_TRANSLATE_URL }, cfg);
+  }catch{
+    return { translateUrl: DEFAULT_TRANSLATE_URL };
+  }
 }
 async function fetchSheetCSV(url){
   if (!url) throw new Error('Thiếu CSV URL');
@@ -282,6 +289,7 @@ window.LE = {
   const hasTTS = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
   let voices = [];
   let ready = false;
+  let voicesPromise = null;
   function loadVoices(){
     try{
       voices = window.speechSynthesis?.getVoices?.() || [];
@@ -307,23 +315,62 @@ window.LE = {
     return voices[0] || null;
   }
 
+  async function ensureVoices(timeoutMs=2500){
+    if (!hasTTS) return false;
+    // If voices already loaded or previously attempted, still try a short wait for Safari
+    if (!voicesPromise){
+      voicesPromise = new Promise(res => {
+        let done = false;
+        const finish = () => { if (!done){ done=true; res(true); } };
+        try{
+          loadVoices();
+          if (voices && voices.length){ finish(); return; }
+        }catch{}
+        const onvc = ()=>{ try{ loadVoices(); }catch{} finish(); };
+        try{ window.speechSynthesis?.addEventListener?.('voiceschanged', onvc); }catch{}
+        setTimeout(()=>{
+          try{ window.speechSynthesis?.removeEventListener?.('voiceschanged', onvc); }catch{}
+          finish();
+        }, timeoutMs);
+      });
+    }
+    try{ await voicesPromise; }catch{}
+    return (voices && voices.length) ? true : false;
+  }
+
+  function resumeIfPaused(){
+    try{
+      // Safari sometimes needs resume() to actually output audio
+      window.speechSynthesis?.resume?.();
+    }catch{}
+  }
+
   function speak(text, { lang='en-US', rate=1, pitch=1, volume=1 }={}){
     if (!hasTTS) return Promise.resolve(false);
-    return new Promise(resolve => {
+    return new Promise(async resolve => {
       const t = (text||'').toString().trim();
       if (!t){ resolve(false); return; }
+      // ensure voices
+      try{ await ensureVoices(1200); }catch{}
       const u = new SpeechSynthesisUtterance(t);
       u.lang = lang; u.rate = rate; u.pitch = pitch; u.volume = volume;
       const v = pickVoice(lang); if (v) u.voice = v;
-      u.onend = () => resolve(true);
-      u.onerror = () => resolve(false);
+      let settled = false;
+      const settle = (val)=>{ if (!settled){ settled=true; resolve(val); } };
+      u.onend = () => settle(true);
+      u.onerror = () => settle(false);
       // Cancel any ongoing utterances, then speak after a microtask to avoid race conditions in some browsers
       try{ window.speechSynthesis.cancel(); }catch{}
       try{
         setTimeout(() => {
-          try{ window.speechSynthesis.speak(u); }catch(e){ resolve(false); }
+          try{
+            resumeIfPaused();
+            window.speechSynthesis.speak(u);
+            // Fallback timeout: if no end/error after a while, consider failure
+            setTimeout(()=> settle(false), Math.max(1200, Math.min(4000, Math.ceil(t.length*80))));
+          }catch(e){ settle(false); }
         }, 0);
-      }catch{ resolve(false); }
+      }catch{ settle(false); }
     });
   }
 
@@ -343,11 +390,54 @@ window.LE = {
     return run();
   }
 
+  function buildGoogleTTSUrl(text, lang){
+    const q = encodeURIComponent((text||'').toString());
+    const tl = encodeURIComponent((lang||'en').toString());
+    // Unofficial Google Translate TTS endpoint; may be rate-limited or blocked. Use with care.
+    return `https://translate.google.com/translate_tts?ie=UTF-8&q=${q}&tl=${tl}&client=tw-ob`;
+  }
+
+  function speakViaAudio(text, { lang='en', provider='config' }={}){
+    const t = (text||'').toString().trim(); if (!t) return Promise.resolve(false);
+    return new Promise(async (resolve)=>{
+      try{
+        let url = '';
+        if (provider === 'google'){
+          url = buildGoogleTTSUrl(t, lang);
+        } else {
+          const cfg = (window.LE && LE.loadSheetConfig && LE.loadSheetConfig()) || {};
+          const base = cfg.ttsUrl || '';
+          if (!base) { resolve(false); return; }
+          const sep = base.includes('?') ? '&' : '?';
+          url = `${base}${sep}text=${encodeURIComponent(t)}&lang=${encodeURIComponent(lang)}`;
+        }
+        const a = new Audio();
+        a.crossOrigin = 'anonymous';
+        a.src = url;
+        a.onended = ()=> resolve(true);
+        a.onerror = ()=> resolve(false);
+        // Some browsers require user gesture; assume caller is in click handler.
+        try{
+          await a.play();
+        }catch(err){
+          // As a last resort, open the audio in a new tab/window to bypass autoplay/CORS UI blocks
+          try{
+            const win = window.open(url, '_blank', 'noopener');
+            if (win) { resolve(true); return; }
+          }catch{}
+          resolve(false);
+        }
+      }catch{ resolve(false); }
+    });
+  }
+
   window.LE = Object.assign({}, window.LE, {
     tts: {
       supported: () => !!hasTTS,
+      ensureVoices,
       speak,
       chainSpeak,
+      speakViaAudio,
     }
   });
 })();

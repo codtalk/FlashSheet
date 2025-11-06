@@ -72,6 +72,7 @@ apple,A round fruit,Quả táo
 - Dùng "Đồng bộ (Sheet ↔ Local)" để tải từ Sheet về (hợp nhất) và đẩy các mục mới từ Local lên Sheet (không xoá dữ liệu ở hai phía).
 - Trên `index.html` (Luyện tập) có thể bấm "Tải từ Sheet" để nạp ngay dữ liệu mới.
 - Trên `study.html` (Học từ), nhấp vào thẻ để lật, dùng nút Trước/Sau để chuyển thẻ; bấm Trộn để xáo thứ tự.
+ - Nút "🔈 Nghe" trên `study.html` ưu tiên dùng Web Speech (trên Chrome/Safari). Nếu môi trường chặn, bạn có thể cấu hình "Apps Script TTS URL" trong `admin.html` để dùng fallback audio qua endpoint của bạn.
 
 ## Đồng bộ giữa các thiết bị (Google Sheet)
 
