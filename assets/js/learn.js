@@ -258,8 +258,9 @@
           .catch(()=>{});
       }
     }catch(e){ /* ignore */ }
-    // move to next due/new card
-    advanceSRSQueue();
+    // NOTE: do NOT auto-advance to the next card here. Keep the user on the current card
+    // so they can review the answer, replay TTS, or inspect the translation before moving.
+    // advanceSRSQueue();
   }
 
   function buildSRSQueue(){
