@@ -168,8 +168,8 @@ function confettiBurst(canvas) {
 
 // Basic CSV parser for dataset
 // Supported formats:
-// 1) word,definitions  (definitions separated by ';' or '|')
-// 2) word,def1,def2,def3
+// 1) word,meanings  (meanings separated by ';' or '|')
+// 2) word,meaning1,meaning2,meaning3
 function parseCSVToDataset(csvText) {
   const lines = csvText.split(/\r?\n/).filter(l => l.length > 0);
   const out = [];
@@ -182,6 +182,7 @@ function parseCSVToDataset(csvText) {
     .normalize('NFD').replace(/\p{Diacritic}/gu, '');
   const WORD_KEYS = ['word','tu','tu vung','tu-vung','term','vocabulary'];
   const DEF_KEYS = ['definitions','dinh nghia','dinh-nghia','dinh nghia','mo ta','mo-ta','mo ta','mota','meaning','nghia','desc','description'];
+  const EXAMPLE_KEYS = ['example','examples','sentence','sentences','vd','vi du','ví dụ','ví-dụ'];
   const TS_KEYS = ['timestamp','date','ngay','time','created','createdat'];
   const looksLikeDate = (s) => {
     const v = strip(s);
@@ -200,10 +201,11 @@ function parseCSVToDataset(csvText) {
   const start = headerHasKnown ? 1 : 0;
 
   // figure out column indices if header known
-  let wi = -1, di = -1, ti = -1;
+  let wi = -1, di = -1, ei = -1, ti = -1;
   if (headerHasKnown) {
     wi = header.findIndex(h => WORD_KEYS.includes(h));
     di = header.findIndex(h => DEF_KEYS.includes(h));
+    ei = header.findIndex(h => EXAMPLE_KEYS.includes(h));
     ti = header.findIndex(h => TS_KEYS.includes(h));
   }
 
@@ -219,7 +221,7 @@ function parseCSVToDataset(csvText) {
         const raw = cols[di] || '';
         defs = raw.split(/;|\|/).map(d => d.trim()).filter(Boolean);
       } else {
-        // no explicit definitions column: take remaining non-empty, excluding timestamp and word
+  // no explicit meanings column: take remaining non-empty, excluding timestamp and word
         defs = cols.filter((_, idx) => idx !== wi && idx !== ti)
                    .map(x => x.trim()).filter(Boolean);
         // also split by ; or |
@@ -227,15 +229,21 @@ function parseCSVToDataset(csvText) {
           defs = defs[0].split(/;|\|/).map(d => d.trim()).filter(Boolean);
         }
       }
+      // examples column if present
+      if (ei >= 0) {
+        const rawEx = cols[ei] || '';
+        const exs = rawEx.split(/;|\|/).map(d => d.trim()).filter(Boolean);
+        if (exs.length) defs.examples = exs; // temporarily attach to defs variable (we'll map to rowObj below)
+      }
     } else {
       // No recognizable header
       if (cols.length >= 3 && looksLikeDate(cols[0])) {
-        // Common pattern from our Apps Script: [Timestamp, Word, Definitions]
+  // Common pattern from our Apps Script: [Timestamp, Word, Meanings]
         word = cols[1] || '';
         const raw = cols.slice(2).join(';');
         defs = raw.split(/;|\|/).map(d => d.trim()).filter(Boolean);
       } else {
-        // fallback: first col as word, rest as definitions
+  // fallback: first col as word, rest as meanings
         word = cols[0] || '';
         const raw = cols.slice(1).join(';');
         defs = raw.split(/;|\|/).map(d => d.trim()).filter(Boolean);
@@ -244,13 +252,24 @@ function parseCSVToDataset(csvText) {
 
     if (word) {
       // Build result object and include any extra columns (SRS fields) when header present
-      const rowObj = { word, definitions: defs };
+      // Store canonical `meanings` field; also examples if any
+      const rowObj = { word, meanings: defs.slice ? defs.slice() : (Array.isArray(defs) ? defs : []) };
+      if (defs && defs.examples) {
+        rowObj.examples = exs;
+      }
       if (headerHasKnown) {
         for (let j = 0; j < headerRaw.length; j++){
           const key = headerRaw[j];
           if (!key) continue;
           // Skip columns already parsed
           if (j === wi || j === di || j === ti) continue;
+          // also capture example column explicitly
+          if (j === ei) {
+            const rawEx2 = cols[j] || '';
+            const exs2 = rawEx2.split(/;|\|/).map(d => d.trim()).filter(Boolean);
+            if (exs2.length) rowObj.examples = exs2;
+            continue;
+          }
           rowObj[key] = cols[j] || '';
         }
       }
@@ -341,8 +360,14 @@ function fetchJsonp(url, timeout = 9000){
     }, timeout);
   });
 }
+
+// Replace cloze underscores (____) with equal-length dashes (----) for clearer display
+function clozeToDashes(text){
+  if (!text) return text;
+  return String(text).replace(/_{2,}/g, function(m){ return '-'.repeat(m.length); });
+}
 // Append rows to Apps Script endpoint
-// rows: Array<{word, definitions: string[]}>; server decides how to store
+// rows: Array<{word, meanings: string[]}>; server decides how to store
 async function appendRowsToSheet(endpoint, rows){
   if (!endpoint) throw new Error('Thiếu Apps Script URL');
   // If this looks like an Apps Script endpoint and a user is set, append the user param
@@ -362,12 +387,12 @@ async function appendRowsToSheet(endpoint, rows){
     const out = {};
     for (const k in r){
       if (!Object.prototype.hasOwnProperty.call(r,k)) continue;
-      if (k === 'definitions') out.definitions = (r.definitions||[]).join('; ');
+      if (k === 'meanings') out.meanings = (r.meanings||[]).join('; ');
+      else if (k === 'examples') out.examples = (r.examples||[]).join('; ');
       else out[k] = r[k];
     }
-    // ensure word + definitions exist
+    // ensure word exists
     if (!out.word && r.word) out.word = r.word;
-    if (!out.definitions && r.definitions) out.definitions = (r.definitions||[]).join('; ');
     return out;
   });
   // Use form-urlencoded to avoid CORS preflight to Apps Script
@@ -417,6 +442,7 @@ window.LE = {
   fetchSheetCSV,
   loadDefaultDataset,
   fetchJsonp,
+  clozeToDashes,
   appendRowsToSheet,
 };
 

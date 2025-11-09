@@ -48,7 +48,7 @@
   }
 
   function preferredTranslation(item){
-    const defs = Array.isArray(item.definitions) ? item.definitions : [];
+    const defs = Array.isArray(item.meanings) && item.meanings.length ? item.meanings : [];
     if (!defs.length) return '';
     const vn = defs.find(d => containsVietnamese(d));
     if (vn) return vn;
@@ -67,8 +67,9 @@
   }
 
   function exampleSentences(item){
-    const defs = Array.isArray(item.definitions) ? item.definitions : [];
-    const eng = defs.filter(d => !containsVietnamese(d));
+    // Prefer explicit examples field; fallback to English meanings
+    const examples = Array.isArray(item.examples) && item.examples.length ? item.examples : (Array.isArray(item.meanings) ? item.meanings : []);
+    const eng = examples.filter(d => !containsVietnamese(d));
     const w = item.word || '';
     const filled = eng.map(e => fillCloze(e, w)).filter(Boolean);
     // pick up to 2 examples
@@ -109,11 +110,13 @@
     } else {
       fcImage.hidden = true; fcImage.innerHTML = '';
     }
-    // front: list only NON-Vietnamese definitions/examples (không hiển thị nghĩa tiếng Việt)
-    const defs = Array.isArray(item.definitions) ? item.definitions : [];
+  // front: list only NON-Vietnamese meanings/examples (không hiển thị nghĩa tiếng Việt)
+  const defs = Array.isArray(item.meanings) && item.meanings.length ? item.meanings : [];
     const enDefs = defs.filter(d => !containsVietnamese(d));
     if (enDefs.length){
-      fcDefs.innerHTML = enDefs.map(d => `<li>${d}</li>`).join('');
+      // Replace cloze underscores with visible dashes for easier counting
+      const conv = (window.LE && LE.clozeToDashes) ? LE.clozeToDashes : (s=>s);
+      fcDefs.innerHTML = enDefs.map(d => `<li>${conv(d)}</li>`).join('');
     } else {
       fcDefs.innerHTML = `<li class="muted">(Không có định nghĩa tiếng Anh để hiển thị)</li>`;
     }
@@ -274,8 +277,8 @@
       if (writeUrl){
         // include SRS fields if available
         const srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {};
-        const srs = srsStore[(item.word||'').toLowerCase()] || {};
-        const row = Object.assign({ word: item.word, definitions: item.definitions || [], selectedForStudy: '1' }, srs);
+    const srs = srsStore[(item.word||'').toLowerCase()] || {};
+  const row = Object.assign({ word: item.word, meanings: (item.meanings || []), examples: (item.examples || []), selectedForStudy: '1' }, srs);
         await LE.appendRowsToSheet(writeUrl, [row]);
       }
     }catch(err){ console.warn('Persist selection to Sheet failed', err); }

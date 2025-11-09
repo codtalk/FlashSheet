@@ -41,19 +41,31 @@ function doPost(e){
       }
     });
 
-    // Ensure required base header fields
-    var required = ['timestamp','word','definition'];
-    // Merge existing header, keeping order, and then append any missing incoming keys (except timestamp/definition aliases)
+  // Ensure required base header fields (canonical column names)
+  // Primary fields used by client: timestamp, word, meanings, examples, selectedForStudy
+  // SRS fields: addedAt, reps, lapses, ease, interval, due, lastReview
+  var required = ['timestamp','word','meanings','examples','selectedForStudy','addedAt','reps','lapses','ease','interval','due','lastReview'];
+  // Merge existing header, keeping order, and then append any missing incoming keys (except timestamp/meaning aliases)
     var finalHeader = header.length ? header.slice() : required.slice();
-    // Add incoming keys if not already present
+    // Add incoming keys if not already present (preserve order: keep required first, then any extra keys)
     Object.keys(incomingKeys).forEach(function(k){
       var lk = k.toString();
-      if (lk === 'definition' || lk === 'definitions') return; // handled as definition
-      if (lk === 'timestamp') return;
+      if (lk === 'timestamp' || lk === 'word') return;
       if (finalHeader.indexOf(lk) === -1) finalHeader.push(lk);
     });
-    // Ensure 'definition' column exists
-    if (finalHeader.indexOf('definition') === -1) finalHeader.splice(1,0,'definition');
+    // Ensure canonical required columns are present in finalHeader (insert missing required columns after timestamp/word)
+    required.forEach(function(col){
+      if (finalHeader.indexOf(col) === -1){
+        // insert after 'word' if it's one of the primary fields, otherwise append
+        var wi = finalHeader.indexOf('word');
+        if (wi >= 0 && (col === 'meanings' || col === 'examples' || col === 'selectedForStudy')){
+          finalHeader.splice(wi+1, 0, col);
+        } else {
+          finalHeader.push(col);
+        }
+      }
+    });
+    // Do not force legacy definition column; keep canonical fields only
 
     // If header changed, write it
     var headerChanged = (header.length !== finalHeader.length) || finalHeader.some(function(h,i){ return header[i] !== h; });
@@ -81,13 +93,9 @@ function doPost(e){
     rows.forEach(function(r){
       var word = (r.word !== undefined ? r.word : (Array.isArray(r) ? r[1] : '') ) || '';
       word = (word || '').toString().trim();
-      var defs = r.definition !== undefined ? r.definition : (r.definitions !== undefined ? r.definitions : '');
-      if (Array.isArray(defs)) defs = defs.join('; ');
-      defs = (defs || '').toString();
-
       var isFeedback = (r.type && String(r.type).toLowerCase() === 'feedback') || word === '[feedback]';
       if (isFeedback){
-        var msg = r.message !== undefined ? r.message : defs;
+        var msg = r.message !== undefined ? r.message : '';
         var ctx = r.ctx || '';
         var user = r.user || '';
         fbValues.push([now, user, msg, ctx]);
@@ -98,16 +106,25 @@ function doPost(e){
       var rowArr = [];
       for (var hi = 0; hi < header.length; hi++){
         var col = header[hi];
-        if (col === 'timestamp') rowArr.push(now);
-        else if (col === 'word') rowArr.push(word);
-        else if (col === 'definition') rowArr.push(defs);
-        else {
-          // Other columns: take value from incoming object or ''
-          var v = r[col] !== undefined ? r[col] : '';
-          // If definitions provided as array, skip (already handled)
-          if (Array.isArray(v)) v = v.join('; ');
-          rowArr.push(v);
-        }
+          if (col === 'timestamp') rowArr.push(now);
+          else if (col === 'word') rowArr.push(word);
+          else if (col === 'meanings'){
+            var mv = r.meanings !== undefined ? r.meanings : '';
+            if (Array.isArray(mv)) mv = mv.join('; ');
+            rowArr.push(mv);
+          } else if (col === 'examples'){
+            var ev = r.examples !== undefined ? r.examples : r.example !== undefined ? r.example : '';
+            if (Array.isArray(ev)) ev = ev.join('; ');
+            rowArr.push(ev);
+          } else if (col === 'selectedForStudy'){
+            var sf = r.selectedForStudy !== undefined ? r.selectedForStudy : (r.selected !== undefined ? r.selected : '');
+            rowArr.push(sf);
+          } else {
+            // Other columns: take value from incoming object or ''
+            var v = r[col] !== undefined ? r[col] : '';
+            if (Array.isArray(v)) v = v.join('; ');
+            rowArr.push(v);
+          }
       }
 
       if (!word){
@@ -162,8 +179,8 @@ function doGet(e){
     var sheet = ss.getSheetByName(sheetName);
     if (!sheet){
       sheet = ss.insertSheet(sheetName);
-      // create an empty header
-      sheet.appendRow(['timestamp','word','definition']);
+      // create an empty header using canonical columns
+      sheet.appendRow(['timestamp','word','meanings','examples']);
     }
     if (op === 'read'){
       var data = sheet.getDataRange().getValues();
@@ -181,12 +198,19 @@ function doGet(e){
         for (var j = 0; j < header.length; j++){
           var key = (header[j] || '').toString();
           var val = row[j];
-          if (key === 'definition' || key === 'definitions'){
-            var s = (val || '').toString();
-            obj['definitions'] = s ? s.split(/;\s*/).filter(Boolean) : [];
-          } else if (key){
-            obj[key] = val;
-          }
+            if (key === 'definition' || key === 'definitions'){
+              // legacy header: map into canonical 'meanings'
+              var sLegacy = (val || '').toString();
+              obj['meanings'] = sLegacy ? sLegacy.split(/;\s*/).filter(Boolean) : [];
+            } else if (key === 'meanings'){
+              var s2 = (val || '').toString();
+              obj['meanings'] = s2 ? s2.split(/;\s*/).filter(Boolean) : [];
+            } else if (key === 'examples'){
+              var s3 = (val || '').toString();
+              obj['examples'] = s3 ? s3.split(/;\s*/).filter(Boolean) : [];
+            } else if (key){
+              obj[key] = val;
+            }
         }
         // ensure word exists
         if (obj.word) out.push(obj);

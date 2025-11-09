@@ -40,6 +40,8 @@
   const FEEDBACK_BUF_KEY = 'fs_feedback_buffer';
   const FEEDBACK_USER_KEY = 'fs_feedback_user';
   let lastDef = '';
+  let lastOriginal = '';
+  let lastSource = '';
   const SHEET_PROMPT_KEY = 'fs_sheet_prompt_date';
   const AUTO_TTS_KEY = 'fs_auto_tts';
   const AUTO_TRANS_KEY = 'fs_auto_trans';
@@ -88,11 +90,40 @@
 
   function setQuestion(index){
     const item = dataset[index];
-    const defs = item.definitions || [];
-    // pick a random definition for the flashcard front
-    const def = defs[Math.floor(Math.random()*defs.length)];
-    questionText.textContent = def;
-    lastDef = def;
+  const meanings = Array.isArray(item.meanings) ? item.meanings : [];
+    const examples = Array.isArray(item.examples) ? item.examples : [];
+    // Decide whether to show a meaning or an example as the question
+    let displayed = '';
+    lastOriginal = '';
+    lastSource = '';
+    if (examples.length > 0 && meanings.length > 0) {
+      // randomly choose between meaning and example
+      if (Math.random() < 0.5) lastSource = 'meaning'; else lastSource = 'example';
+    } else if (examples.length > 0) lastSource = 'example';
+    else lastSource = 'meaning';
+    if (lastSource === 'meaning'){
+      const def = meanings[Math.floor(Math.random()*meanings.length)];
+      // For display, replace cloze underscores with visible dashes so user can see how many words are missing
+      try{ displayed = (window.LE && LE.clozeToDashes) ? LE.clozeToDashes(def) : def; }catch(e){ displayed = def; }
+      lastOriginal = def || '';
+    } else {
+      // example: mask the target word inside the sentence
+      const ex = examples[Math.floor(Math.random()*examples.length)];
+      lastOriginal = ex || '';
+      // mask occurrences of the word (handle simple plural 's')
+      try{
+        const w = (item.word||'').toString().trim();
+        function escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&'); }
+        if (w){
+          const re = new RegExp('\\b' + escapeRegExp(w) + '(s)?\\b','gi');
+          displayed = (ex||'').replace(re, (m)=> '-'.repeat(m.length));
+        } else {
+          displayed = ex;
+        }
+      }catch(e){ displayed = ex; }
+    }
+    questionText.textContent = displayed;
+    lastDef = displayed;
     qIndex.textContent = `${queue.indexOf(index)+1}/${queue.length}`;
 
     renderAnswerUI(index);
@@ -254,7 +285,7 @@
     try{
       const writeUrl = (sheetCfg && sheetCfg.writeUrl) || '';
       if (writeUrl && window.LE && LE.appendRowsToSheet){
-        LE.appendRowsToSheet(writeUrl, [{ word: item.word, definitions: item.definitions || [], addedAt: card.addedAt, reps: card.reps, lapses: card.lapses, ease: card.ease, interval: card.interval, due: card.due, lastReview: card.lastReview }])
+  LE.appendRowsToSheet(writeUrl, [{ word: item.word, meanings: (item.meanings || []), examples: (item.examples || []), addedAt: card.addedAt, reps: card.reps, lapses: card.lapses, ease: card.ease, interval: card.interval, due: card.due, lastReview: card.lastReview }])
           .catch(()=>{});
       }
     }catch(e){ /* ignore */ }
@@ -303,7 +334,7 @@
   }
 
   function buildFilledSentence(item){
-    const q = (lastDef || '').toString();
+    const q = (lastOriginal || lastDef || '').toString();
     if (!q || !isEnglish(q)) return '';
     const w = (item && item.word) ? String(item.word) : '';
     if (!w) return q;
@@ -316,13 +347,13 @@
   }
 
   function getPreferredTranslation(item){
-    const defs = Array.isArray(item.definitions) ? item.definitions : [];
+  const defs = Array.isArray(item.meanings) && item.meanings.length ? item.meanings : [];
     if (!defs.length) return '';
     // Prefer: first def that looks Vietnamese
     const vn = defs.find(d => containsVietnamese(d));
     if (vn) return vn;
-    // Next: the first definition if it's not a cloze with ____
-    const firstNonCloze = defs.find(d => !/_{2,}/.test(d));
+  // Next: the first meaning if it's not a cloze with ____
+  const firstNonCloze = defs.find(d => !/_{2,}/.test(d));
     return firstNonCloze || defs[0];
   }
 
@@ -333,7 +364,7 @@
     let shown = false;
     // Determine availability of sentence-read button
     const ttsSupported = !!(window.LE && LE.tts && LE.tts.supported && LE.tts.supported());
-    const englishQ = isEnglish(lastDef);
+    const englishQ = isEnglish(lastOriginal || lastDef);
     const canSentence = !!(btnTransReadSentence && ttsSupported && englishQ);
     if (btnTransReadSentence){
       btnTransReadSentence.hidden = !canSentence;

@@ -3,7 +3,9 @@
 (function(){
   const APP_CFG = (window && window.APP_CONFIG) ? window.APP_CONFIG : {};
   const defsContainer = document.getElementById('defsContainer');
+  const examplesContainer = document.getElementById('examplesContainer');
   const btnAddDef = document.getElementById('btnAddDef');
+  const btnAddExample = document.getElementById('btnAddExample');
   const wordForm = document.getElementById('wordForm');
   const wordInput = document.getElementById('wordInput');
   const btnReset = document.getElementById('btnReset');
@@ -68,9 +70,34 @@
     return wrap;
   }
 
+  function createExampleItem(value = ''){
+    const wrap = document.createElement('div');
+    wrap.className = 'def-item example-item';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'answer-input';
+    input.placeholder = 'Nhập ví dụ / câu mẫu (English)';
+    input.value = value;
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'btn secondary';
+    del.textContent = 'X';
+    del.title = 'Xóa ví dụ này';
+    del.addEventListener('click', () => wrap.remove());
+    wrap.appendChild(input);
+    wrap.appendChild(del);
+    return wrap;
+  }
+
   function ensureOneDef(){
     if (defsContainer.children.length === 0) {
       defsContainer.appendChild(createDefItem());
+    }
+  }
+
+  function ensureOneExample(){
+    if (examplesContainer && examplesContainer.children.length === 0) {
+      examplesContainer.appendChild(createExampleItem());
     }
   }
 
@@ -83,7 +110,7 @@
     datasetList.innerHTML = '';
     dataset.forEach((item, idx) => {
       const li = document.createElement('li');
-      const defs = (item.definitions || []).slice(0,2).join(' | ');
+    const defs = ((item.meanings && item.meanings.length) ? item.meanings : []).slice(0,2).join(' | ');
       li.textContent = `${idx+1}. ${item.word} — ${defs}`;
       datasetList.appendChild(li);
     });
@@ -103,16 +130,25 @@
     defsContainer.appendChild(createDefItem());
   });
 
+  btnAddExample?.addEventListener('click', () => {
+    if (!examplesContainer) return;
+    examplesContainer.appendChild(createExampleItem());
+  });
+
   wordForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const word = wordInput.value.trim();
     const defs = Array.from(defsContainer.querySelectorAll('input'))
       .map(i => i.value.trim())
       .filter(Boolean);
+    const exs = examplesContainer ? Array.from(examplesContainer.querySelectorAll('input'))
+      .map(i => i.value.trim())
+      .filter(Boolean) : [];
     if (!word) { alert('Vui lòng nhập từ vựng'); return; }
     if (defs.length === 0) { alert('Vui lòng nhập ít nhất 1 mô tả'); return; }
 
-    const item = { word, definitions: defs };
+  // Store canonical fields: `meanings` + `examples`
+  const item = { word, meanings: defs, examples: exs };
 
     // Try append to Google Sheet (Sheet is single source of truth)
     (async () => {
@@ -132,6 +168,8 @@
       wordInput.value = '';
       defsContainer.innerHTML = '';
       ensureOneDef();
+      if (examplesContainer) examplesContainer.innerHTML = '';
+      ensureOneExample();
     })();
   });
 
@@ -139,6 +177,8 @@
     wordInput.value = '';
     defsContainer.innerHTML = '';
     ensureOneDef();
+    if (examplesContainer) examplesContainer.innerHTML = '';
+    ensureOneExample();
   });
 
   // Removed: import CSV/JSON on admin page
@@ -151,7 +191,8 @@
     (arr||[]).forEach(item => {
       const key = normalizeWord(item.word);
       if (!key) return;
-      const defs = new Set((item.definitions||[]).map(normalizeDef).filter(Boolean));
+      // prefer new `meanings` field only
+      const defs = new Set((item.meanings || []).map(normalizeDef).filter(Boolean));
       if (!map.has(key)) map.set(key, defs);
       else {
         const s = map.get(key); defs.forEach(v => s.add(v));
@@ -163,7 +204,7 @@
   function fromMap(map){
     const out = [];
     for (const [key, set] of map.entries()){
-      out.push({ word: key, definitions: Array.from(set) });
+      out.push({ word: key, meanings: Array.from(set) });
     }
     // sort by word
     out.sort((a,b)=> a.word.localeCompare(b.word));
@@ -193,7 +234,7 @@
       const newDefs = Array.from(defs).filter(d => !sdefs.has(d));
       if (newDefs.length){
         const srs = srsStore[word] || srsStore[word.toLowerCase()] || {};
-        rows.push(Object.assign({ word, definitions: newDefs }, srs));
+        rows.push(Object.assign({ word, meanings: newDefs }, srs));
       }
     }
     if (rows.length){
@@ -260,6 +301,7 @@
 
   // init
   ensureOneDef();
+  ensureOneExample();
   loadSheetForm();
   // If no sheet configured, populate Local Storage from vocab.json once
   (async function bootstrapLocalFromFileIfNeeded(){

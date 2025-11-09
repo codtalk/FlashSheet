@@ -89,7 +89,7 @@ function doPost(e) {
     var fbValues = [];
     rows.forEach(function(r){
       var word = (r.word !== undefined ? r.word : (Array.isArray(r) ? r[0] : '')) || '';
-      var defs = (r.definition !== undefined ? r.definition : (Array.isArray(r) ? r[1] : (r.definitions || ''))) || '';
+  var defs = (r.meanings !== undefined ? r.meanings : (Array.isArray(r) ? r[1] : '')) || '';
       if (Array.isArray(defs)) defs = defs.join('; ');
       // Route góp ý: nếu type=feedback hoặc word='[feedback]'
       var isFeedback = (r.type && String(r.type).toLowerCase() === 'feedback') || word === '[feedback]';
@@ -104,7 +104,7 @@ function doPost(e) {
     });
 
     if (mainValues.length){
-      if (main.getLastRow() === 0) main.appendRow(['timestamp','word','definition']);
+      if (main.getLastRow() === 0) main.appendRow(['timestamp','word','meanings']);
       main.getRange(main.getLastRow()+1, 1, mainValues.length, 3).setValues(mainValues);
     }
     if (fbValues.length){

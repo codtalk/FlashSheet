@@ -78,20 +78,20 @@ Lưu ý: Trình duyệt có thể yêu cầu tương tác người dùng trướ
 ## Định dạng dữ liệu
 ```json
 [
-  { "word": "apple", "definitions": ["A round fruit...", "Quả táo"] },
-  { "word": "run",   "definitions": ["To move quickly...", "Chạy"] }
+  { "word": "apple", "meanings": ["A round fruit...", "Quả táo"] },
+  { "word": "run",   "meanings": ["To move quickly...", "Chạy"] }
 ]
 ```
 
 Hoặc CSV (đơn giản) với một trong các dạng:
 
 ```
-# Có tiêu đề, cột definitions ngăn bởi ; hoặc |
-word,definitions
+# Có tiêu đề, cột meanings ngăn bởi ; hoặc |
+word,meanings
 apple,A round fruit;Quả táo
 run,To move quickly|Chạy
 
-# Không tiêu đề: cột 1 là từ, các cột sau là định nghĩa
+# Không tiêu đề: cột 1 là từ, các cột sau là nghĩa/giải thích
 apple,A round fruit,Quả táo
 ```
 
@@ -104,7 +104,7 @@ apple,A round fruit,Quả táo
 
 ## Đồng bộ giữa các thiết bị (Google Sheet)
 
-Ứng dụng dùng Google Sheet để đồng bộ hoá từ vựng cơ bản (word + definitions). Ứng dụng cũng hỗ trợ đọc/ghi các cột trạng thái SRS (`addedAt, reps, lapses, ease, interval, due, lastReview`) nếu Apps Script của bạn được cấu hình để lưu các cột này — do đó không cần làm thủ công qua Excel.
+Ứng dụng dùng Google Sheet để đồng bộ hoá từ vựng cơ bản (word + meanings). Ứng dụng cũng hỗ trợ đọc/ghi các cột trạng thái SRS (`addedAt, reps, lapses, ease, interval, due, lastReview`) nếu Apps Script của bạn được cấu hình để lưu các cột này — do đó không cần làm thủ công qua Excel.
 
 1) Đọc tự động từ Google Sheet (CSV)
 - Trong Google Sheets: File → Share → Publish to web → chọn sheet cụ thể → định dạng CSV → Publish → Copy URL (dạng ...&output=csv, không có dấu ";" ở cuối).
@@ -143,7 +143,7 @@ function doPost(e) {
     var fbValues = [];
     rows.forEach(function(r){
       var word = (r.word !== undefined ? r.word : (Array.isArray(r) ? r[0] : '')) || '';
-      var defs = (r.definition !== undefined ? r.definition : (Array.isArray(r) ? r[1] : (r.definitions || ''))) || '';
+    var defs = (r.meanings !== undefined ? r.meanings : (Array.isArray(r) ? r[1] : '')) || '';
       if (Array.isArray(defs)) defs = defs.join('; ');
       var isFeedback = (r.type && String(r.type).toLowerCase() === 'feedback') || word === '[feedback]';
       if (isFeedback) {
@@ -165,7 +165,7 @@ function doPost(e) {
     });
 
     if (mainValues.length){
-      if (main.getLastRow() === 0) main.appendRow(['timestamp','word','definition','addedAt','reps','lapses','ease','interval','due','lastReview']);
+  if (main.getLastRow() === 0) main.appendRow(['timestamp','word','meanings','addedAt','reps','lapses','ease','interval','due','lastReview']);
       main.getRange(main.getLastRow()+1, 1, mainValues.length, 10).setValues(mainValues);
     }
     if (fbValues.length){
@@ -195,7 +195,7 @@ Triển khai: Deploy → New deployment → Type: Web app → Execute as: Me →
 ```bash
 curl -v -X POST \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  --data-urlencode 'rows=[{"word":"test","definitions":"a; b"}]' \
+  --data-urlencode 'rows=[{"word":"test","meanings":"a; b"}]' \
   'YOUR_WEB_APP_URL'
 ```
 Nếu trả 200/ok thì Web App nhận tốt.

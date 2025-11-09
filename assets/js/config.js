@@ -5,7 +5,7 @@ window.APP_CONFIG = window.APP_CONFIG || {
   FEEDBACK_URL: 'https://script.google.com/macros/s/AKfycbzX08o-y5trCA7-lCw-rLRL369Ctte2kCv_2XqA5htT3f0O5cKWgOFs1J7apbLM6eoNHw/exec',
   // Default public CSV and write exec (ThienPahm preset)
   DEFAULT_CSV: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuYF-fncf9PSBfkDPMAv_q4LiYColRiVIpUniAUKuQFLPXqXhMgkYsTmoDr-BCv5aqaqNRAnYx7_TC/pub?output=csv',
-  DEFAULT_WRITE: 'https://script.google.com/macros/s/AKfycbwmL1qr6Hvb6vGsfQ-bQmwwfJ9DuRL69IBm4jZdzmw52nu6k97_KpALKnkKtFGDA3xwKA/exec',
+  DEFAULT_WRITE: 'https://script.google.com/macros/s/AKfycbwO7sVK4kTsPdDWpWGL_1UcJ11N0RYg1BXYnzpSYIXoe_Gwxfmi5YQTuHZ0WQi8lnm8Gg/exec',
   DEFAULT_TRANSLATE: 'https://script.google.com/macros/s/AKfycbwDFUlYoI4ody5Iy0qm1lP6WhkjFj15NnaFaEiNkx9p8ZAT7T67Y-ORJ-vonntOno2wFA/exec'
 };
 
