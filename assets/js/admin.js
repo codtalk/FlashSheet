@@ -1,6 +1,7 @@
 // admin.js - Manage dataset creation and persistence
 
 (function(){
+  const APP_CFG = (window && window.APP_CONFIG) ? window.APP_CONFIG : {};
   const defsContainer = document.getElementById('defsContainer');
   const btnAddDef = document.getElementById('btnAddDef');
   const wordForm = document.getElementById('wordForm');
@@ -9,6 +10,7 @@
   const btnSync = document.getElementById('btnSync');
   const datasetInfo = document.getElementById('datasetInfo');
   const datasetList = document.getElementById('datasetList');
+  // Sheet sync elements
   // Sheet sync elements
   const sheetCsvUrlEl = document.getElementById('sheetCsvUrl');
   const sheetWriteUrlEl = document.getElementById('sheetWriteUrl');
@@ -19,9 +21,21 @@
   const btnSheetLoad = document.getElementById('btnSheetLoad');
   const btnSheetSaveCfg = document.getElementById('btnSheetSaveCfg');
   const btnUseThienPreset = document.getElementById('btnUseThienPreset');
+  // SRS config elements
+  const dailyNewLimitEl = document.getElementById('dailyNewLimit');
+  const dailyReviewLimitEl = document.getElementById('dailyReviewLimit');
+  const btnSaveSrsCfg = document.getElementById('btnSaveSrsCfg');
 
   let dataset = [];
   let sheetCfg = LE.loadSheetConfig() || {};
+  // Ensure user is set before any sheet operations
+  const CURRENT_USER = ensureUserPrompt('thienpahm') || '';
+  if (CURRENT_USER) {
+    // prefill sheet config defaults for ThienPahm if none
+    sheetCfg = sheetCfg || {};
+    if (!sheetCfg.writeUrl) sheetCfg.writeUrl = APP_CFG.DEFAULT_WRITE || 'https://script.google.com/macros/s/AKfycbzX08o-y5trCA7-lCw-rLRL369Ctte2kCv_2XqA5htT3f0O5cKWgOFs1J7apbLM6eoNHw/exec';
+    if (!sheetCfg.csvUrl) sheetCfg.csvUrl = APP_CFG.DEFAULT_CSV || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuYF-fncf9PSBfkDPMAv_q4LiYColRiVIpUniAUKuQFLPXqXhMgkYsTmoDr-BCv5aqaqNRAnYx7_TC/pub?output=csv';
+  }
 
   function showToast(msg, type){
     const t = document.createElement('div');
@@ -61,7 +75,7 @@
   }
 
   async function refreshDatasetSummary(){
-    // Show current Local Storage dataset so user sees pulled Sheet data
+    // Show current dataset from Sheet (Sheet is single source of truth)
     dataset = await LE.loadDataset();
     datasetInfo.textContent = `${dataset.length} từ vựng`;
     const datasetCount = document.getElementById('datasetCount');
@@ -82,6 +96,7 @@
     if (sheetTtsUrlEl) sheetTtsUrlEl.value = sheetCfg.ttsUrl || '';
     if (sheetAutoOnLearnEl) sheetAutoOnLearnEl.checked = !!sheetCfg.autoOnLearn;
     if (sheetRefreshSecEl) sheetRefreshSecEl.value = sheetCfg.refreshSec || 120;
+    loadSrsConfig();
   }
 
   btnAddDef.addEventListener('click', () => {
@@ -99,25 +114,25 @@
 
     const item = { word, definitions: defs };
 
-    // Merge: if word exists, merge definitions (unique)
-    const idx = dataset.findIndex(d => d.word.toLowerCase() === word.toLowerCase());
-    if (idx >= 0) {
-      const merged = Array.from(new Set([...(dataset[idx].definitions||[]), ...defs]));
-      dataset[idx] = { word: dataset[idx].word, definitions: merged };
-    } else {
-      dataset.push(item);
-    }
-
-    LE.saveDatasetToLocal(dataset);
-    refreshDatasetSummary();
-
-  // Try auto-append to Google Sheet if configured
-  tryAppendToSheet(item);
-
-    // Reset inputs
-    wordInput.value = '';
-    defsContainer.innerHTML = '';
-    ensureOneDef();
+    // Try append to Google Sheet (Sheet is single source of truth)
+    (async () => {
+      try{
+        await tryAppendToSheet(item);
+        // After successful append, reload dataset from Sheet and refresh UI
+        const sheetData = await getSheetDataset();
+        dataset = sheetData || [];
+        // refresh list
+        await refreshDatasetSummary();
+        showToast('Đã lưu từ lên Sheet và cập nhật danh sách', 'success');
+      }catch(err){
+        console.warn('Append to Sheet failed:', err);
+        showToast('Không lưu được lên Sheet. Kiểm tra cấu hình Write URL', 'error');
+      }
+      // Reset inputs regardless
+      wordInput.value = '';
+      defsContainer.innerHTML = '';
+      ensureOneDef();
+    })();
   });
 
   btnReset.addEventListener('click', () => {
@@ -172,16 +187,23 @@
     const writeUrl = (sheetCfg && sheetCfg.writeUrl) || (sheetWriteUrlEl?.value?.trim());
     if (!writeUrl) return; // no write configured
     const rows = [];
+    const srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {};
     for (const [word, defs] of localMap.entries()){
       const sdefs = sheetMap.get(word) || new Set();
       const newDefs = Array.from(defs).filter(d => !sdefs.has(d));
       if (newDefs.length){
-        rows.push({ word, definitions: newDefs });
+        const srs = srsStore[word] || srsStore[word.toLowerCase()] || {};
+        rows.push(Object.assign({ word, definitions: newDefs }, srs));
       }
     }
     if (rows.length){
       try{
-        await LE.appendRowsToSheet(writeUrl, rows.map(r => ({ word: r.word, definitions: r.definitions })));
+        // Force push to DEFAULT sheet (avoid writing into user's personal sheet)
+        let endpoint = writeUrl;
+        if (endpoint && endpoint.indexOf('script.google.com') >= 0){
+          if (endpoint.indexOf('user=') === -1) endpoint = endpoint + (endpoint.indexOf('?')>=0 ? '&' : '?') + 'user=';
+        }
+        await LE.appendRowsToSheet(endpoint, rows);
         showToast(`Đồng bộ lên Sheet: +${rows.length} mục`, 'success');
       }catch(err){
         console.warn('Push to Sheet failed:', err);
@@ -194,34 +216,43 @@
   btnSync?.addEventListener('click', async () => {
     // Pull from sheet
     const sheetData = await getSheetDataset();
-    // Prefer Local Storage; if empty, fall back to bundled file so we can push file->sheet
-    let localData = await LE.loadDataset();
-    if (!Array.isArray(localData) || localData.length === 0) {
-      const fileData = await LE.loadDatasetFromFile();
-      if (Array.isArray(fileData) && fileData.length) {
-        localData = fileData;
-        // keep local storage in sync for next time
-        LE.saveDatasetToLocal(localData);
-      }
-    }
+    // Use current in-memory dataset (admin edits in this session) as local data to compute deltas
+    let localData = Array.isArray(dataset) ? dataset : [];
 
     const sheetMap = toMap(sheetData);
     const localMap = toMap(localData);
+    // Merge SRS fields from sheet into local SRS store (if present)
+    try{
+      const srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {};
+      (sheetData||[]).forEach(r => {
+        const w = (r.word||'').toString().trim().toLowerCase(); if (!w) return;
+        const card = srsStore[w] || srsStore[w.toLowerCase()] || {};
+        ['addedAt','reps','lapses','ease','interval','due','lastReview'].forEach(f => {
+          if (r[f] !== undefined && r[f] !== ''){
+            const val = r[f];
+            card[f] = (f === 'reps' || f === 'lapses' || f === 'interval') ? parseInt(val,10) || 0 : (isNaN(Number(val)) ? val : Number(val));
+          }
+        });
+        if (!card.addedAt) card.addedAt = Date.now();
+        srsStore[w] = card;
+      });
+      if (window.SRS && SRS.saveStore) SRS.saveStore(srsStore);
+    }catch(e){ console.warn('Merge SRS from sheet failed', e); }
     // merge both ways into local
     for (const [w, defs] of sheetMap.entries()){
       if (!localMap.has(w)) localMap.set(w, new Set(defs));
       else { const s = localMap.get(w); defs.forEach(d => s.add(d)); }
     }
-    const merged = fromMap(localMap);
-    LE.saveDatasetToLocal(merged);
-    await refreshDatasetSummary();
-    showToast(`Tải từ Sheet: +${sheetData.length} (hợp nhất)`, 'success');
+  const merged = fromMap(localMap);
+  dataset = merged;
+  await refreshDatasetSummary();
+  showToast(`Tải từ Sheet: +${sheetData.length} (hợp nhất)`, 'success');
     // Push deltas up (local minus sheet) if write URL configured
     const writeUrl = (sheetCfg && sheetCfg.writeUrl) || (sheetWriteUrlEl?.value?.trim());
     if (writeUrl) {
       await pushDeltasToSheet(localMap, sheetMap);
     } else {
-      showToast('Chưa cấu hình Write URL — đã đồng bộ về Local, bỏ qua đẩy lên Sheet', 'error');
+      showToast('Chưa cấu hình Write URL — đã tải dữ liệu từ Sheet (không đẩy lên Sheet)', 'error');
     }
   });
 
@@ -232,24 +263,16 @@
   loadSheetForm();
   // If no sheet configured, populate Local Storage from vocab.json once
   (async function bootstrapLocalFromFileIfNeeded(){
+    // No local bootstrap from vocab.json: app uses Sheet as source of truth.
     try{
-      const hasSheet = !!(sheetCfg && sheetCfg.csvUrl);
-      const local = await LE.loadDataset();
-      if (!hasSheet && (!Array.isArray(local) || local.length === 0)){
-        const fileData = await LE.loadDatasetFromFile();
-        if (Array.isArray(fileData) && fileData.length){
-          LE.saveDatasetToLocal(fileData);
-        }
-      }
-    }catch(e){ console.warn('bootstrapLocalFromFileIfNeeded failed', e); }
-    // After potential bootstrap, show summary from file
-    refreshDatasetSummary();
+      await refreshDatasetSummary();
+    }catch(e){ console.warn('refreshDatasetSummary failed', e); }
   })();
 
   // Sheet handlers
   btnUseThienPreset?.addEventListener('click', async () => {
-    const csv = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuYF-fncf9PSBfkDPMAv_q4LiYColRiVIpUniAUKuQFLPXqXhMgkYsTmoDr-BCv5aqaqNRAnYx7_TC/pub?output=csv';
-    const write = 'https://script.google.com/macros/s/AKfycbwMVuW1ytLKTZID5dnNoHKdp9EoqcEcrzaG3jKl0xelPtYhqNoeuBLi8XlcXBwBhAL4mg/exec';
+    const csv = APP_CFG.DEFAULT_CSV || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuYF-fncf9PSBfkDPMAv_q4LiYColRiVIpUniAUKuQFLPXqXhMgkYsTmoDr-BCv5aqaqNRAnYx7_TC/pub?output=csv';
+  const write = APP_CFG.DEFAULT_WRITE || 'https://script.google.com/macros/s/AKfycbzX08o-y5trCA7-lCw-rLRL369Ctte2kCv_2XqA5htT3f0O5cKWgOFs1J7apbLM6eoNHw/exec';
     if (sheetCsvUrlEl) sheetCsvUrlEl.value = csv;
     if (sheetWriteUrlEl) sheetWriteUrlEl.value = write;
     sheetCfg = {
@@ -259,18 +282,11 @@
       refreshSec: Math.max(15, parseInt(sheetRefreshSecEl?.value, 10) || 120),
     };
     LE.saveSheetConfig(sheetCfg);
-    showToast('Đã chọn bộ từ của thienpahm và lưu cấu hình', 'success');
-    // Tải dữ liệu về Local Storage ngay
+    showToast('Đã chọn bộ từ và lưu cấu hình Sheet', 'success');
+    // Load dataset from the selected sheet and refresh UI
     try{
-      const data = await LE.fetchSheetCSV(csv);
-      dataset = data;
-      LE.saveDatasetToLocal(dataset);
-      await refreshDatasetSummary();
-      showToast('Đã tải bộ từ về Local Storage', 'success');
-    }catch(err){
-      console.warn('Preset load failed:', err);
-      showToast('Không thể tải bộ từ từ Sheet', 'error');
-    }
+      await btnSheetLoad?.click();
+    }catch(err){ console.warn('Preset load via btnSheetLoad failed', err); }
   });
 
   btnSheetSaveCfg?.addEventListener('click', () => {
@@ -286,14 +302,31 @@
     alert('Đã lưu cấu hình Google Sheet');
   });
 
+  function loadSrsConfig(){
+    try{
+      const dn = localStorage.getItem('fs_srs_daily_new_limit');
+      const dr = localStorage.getItem('fs_srs_daily_review_limit');
+      if (dailyNewLimitEl && dn !== null){ dailyNewLimitEl.value = parseInt(dn,10) || 0; }
+      if (dailyReviewLimitEl && dr !== null){ dailyReviewLimitEl.value = parseInt(dr,10) || 0; }
+    }catch{}
+  }
+  btnSaveSrsCfg?.addEventListener('click', () => {
+    try{
+      const dn = Math.max(0, parseInt(dailyNewLimitEl.value,10) || 0);
+      const dr = Math.max(0, parseInt(dailyReviewLimitEl.value,10) || 0);
+      localStorage.setItem('fs_srs_daily_new_limit', String(dn));
+      localStorage.setItem('fs_srs_daily_review_limit', String(dr));
+      alert('Đã lưu cài đặt SRS');
+    }catch(e){ alert('Không thể lưu SRS: ' + (e.message||e)); }
+  });
+
   btnSheetLoad?.addEventListener('click', async () => {
     try{
       const csvUrl = sheetCsvUrlEl.value.trim();
       if (!csvUrl) { alert('Nhập CSV URL trước'); return; }
-      const data = await LE.fetchSheetCSV(csvUrl);
-      dataset = data;
-      LE.saveDatasetToLocal(dataset);
-      await refreshDatasetSummary();
+  const data = await LE.fetchSheetCSV(csvUrl);
+  dataset = data || [];
+  await refreshDatasetSummary();
       alert('Đã tải dữ liệu từ Google Sheet');
     }catch(err){
       alert(err.message || 'Không thể tải từ Sheet');
@@ -305,7 +338,12 @@
     const writeUrl = (sheetCfg && sheetCfg.writeUrl) || (sheetWriteUrlEl?.value?.trim());
     if (!writeUrl) return; // not configured
     try{
-      const res = await LE.appendRowsToSheet(writeUrl, [newItem]);
+      // Force write to default sheet (do not attach user param)
+      let endpoint = writeUrl;
+      if (endpoint && endpoint.indexOf('script.google.com') >= 0){
+        if (endpoint.indexOf('user=') === -1) endpoint = endpoint + (endpoint.indexOf('?')>=0 ? '&' : '?') + 'user=';
+      }
+      const res = await LE.appendRowsToSheet(endpoint, [newItem]);
       if (res && res.mode === 'no-cors') {
         showToast('Đã gửi lên Sheet (no-cors)', 'success');
       } else {
@@ -327,4 +365,6 @@
       }, 300);
     }
   });
+
+  // Excel import/export removed: using Google Sheet (Apps Script) as single source of truth
 })();

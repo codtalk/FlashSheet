@@ -1,6 +1,7 @@
 // utils.js - shared helpers for LearnEnglish
-// Centralized endpoints
-const FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbwMVuW1ytLKTZID5dnNoHKdp9EoqcEcrzaG3jKl0xelPtYhqNoeuBLi8XlcXBwBhAL4mg/exec';
+// Centralized endpoints are loaded from `assets/js/config.js` which sets window.APP_CONFIG
+const APP_CFG = (window && window.APP_CONFIG) ? window.APP_CONFIG : {};
+const FEEDBACK_URL = APP_CFG.FEEDBACK_URL || '';
 
 // Storage keys
 const STORAGE_KEY = 'learnEnglish.dataset.v2';
@@ -9,26 +10,93 @@ const SHEET_CFG_KEY = 'learnEnglish.sheetConfig.v2';
 // Load dataset: LOCAL-ONLY (do not fallback to file)
 // First-run bootstrap should be handled by callers using loadDatasetFromFile() then saveDatasetToLocal()
 async function loadDataset() {
+  // Load dataset for the current user from Apps Script endpoint if available;
+  // fallback to published CSV when provided.
   try {
-    const ls = localStorage.getItem(STORAGE_KEY);
-    if (ls) return JSON.parse(ls);
-  } catch (e) {
-    console.warn('LocalStorage parse error', e);
-  }
+    const cfg = loadSheetConfig();
+    const user = loadUser();
+    // If a Apps Script writeUrl is present, prefer calling it with ?op=read&user=...
+    const writeUrl = cfg && cfg.writeUrl;
+    if (writeUrl && writeUrl.indexOf('script.google.com') >= 0 && user) {
+      const url = writeUrl + (writeUrl.indexOf('?')>=0 ? '&' : '?') + 'op=read&user=' + encodeURIComponent(user);
+      try{
+        const resp = await fetch(url, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('Apps Script read failed');
+        const json = await resp.json();
+        return Array.isArray(json) ? json : [];
+      }catch(err){
+        console.warn('Failed to fetch via Apps Script read (CORS or network). Will try JSONP fallback:', err);
+        try{
+          const jsonp = await fetchJsonp(url);
+          return Array.isArray(jsonp) ? jsonp : [];
+        }catch(err2){ console.warn('JSONP fallback failed', err2); }
+      }
+    }
+    // Otherwise fallback to CSV URL
+    const csvUrl = cfg && cfg.csvUrl;
+    if (csvUrl){
+      try{
+        return await fetchSheetCSV(csvUrl);
+      }catch(err){ console.warn('Failed to fetch sheet CSV in loadDataset', err); }
+    }
+  } catch (e) { console.warn('loadDataset error', e); }
+  return [];
+}
+
+// Load the DEFAULT sheet (no user param) — useful for shared 'Học từ' view
+async function loadDefaultDataset(){
+  try{
+    const cfg = loadSheetConfig();
+    const writeUrl = cfg && cfg.writeUrl;
+    // If Apps Script exec present, call it WITHOUT user param to read default sheet
+    if (writeUrl && writeUrl.indexOf('script.google.com') >= 0){
+      const url = writeUrl + (writeUrl.indexOf('?')>=0 ? '&' : '?') + 'op=read';
+      try{
+        const resp = await fetch(url, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('Apps Script read failed');
+        const json = await resp.json();
+        return Array.isArray(json) ? json : [];
+      }catch(err){
+        console.warn('Failed to fetch default via Apps Script read, trying JSONP/CVS fallback:', err);
+        try{ const jsonp = await fetchJsonp(url); return Array.isArray(jsonp) ? jsonp : []; }catch(e2){ console.warn('JSONP fallback failed', e2); }
+      }
+    }
+    // Fallback to csvUrl
+    const csvUrl = cfg && cfg.csvUrl;
+    if (csvUrl) return await fetchSheetCSV(csvUrl);
+  }catch(e){ console.warn('loadDefaultDataset error', e); }
   return [];
 }
 
 // Always load from bundled file (ignores Local Storage)
 async function loadDatasetFromFile(){
-  try {
-    const resp = await fetch('data/vocab.json', { cache: 'no-store' });
-    if (resp.ok) return await resp.json();
-  } catch(e){ console.warn('Fetch vocab.json failed', e); }
+  // Deprecated: bundled `data/vocab.json` is no longer used. Return empty array.
+  console.warn('loadDatasetFromFile deprecated: use Google Sheet as data source');
   return [];
 }
 
 function saveDatasetToLocal(dataset) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(dataset));
+  // Deprecated: dataset is stored on Google Sheet. Keep a no-op for compatibility.
+  try{ /* noop to avoid accidental writes to localStorage */ }catch{}
+}
+
+// User management: store current username (used to read/write per-user sheet)
+const USER_KEY = 'fs_current_user';
+function loadUser(){
+  try{ return localStorage.getItem(USER_KEY) || ''; }catch{return '';}
+}
+function saveUser(u){
+  try{ if (u) localStorage.setItem(USER_KEY, String(u).trim()); }catch{}
+}
+// Prompt for user if none set; returns stored or newly set username (or empty string if cancelled)
+function ensureUserPrompt(defaultName){
+  const existing = loadUser();
+  if (existing) return existing;
+  try{
+    const promptName = window.prompt('Nhập tên người dùng (username) để dùng riêng 1 sheet:', defaultName || '');
+    if (promptName && promptName.trim()){ saveUser(promptName.trim()); return promptName.trim(); }
+  }catch{}
+  return '';
 }
 
 function clearDatasetLocal() {
@@ -174,10 +242,24 @@ function parseCSVToDataset(csvText) {
       }
     }
 
-    if (word) out.push({ word, definitions: defs });
+    if (word) {
+      // Build result object and include any extra columns (SRS fields) when header present
+      const rowObj = { word, definitions: defs };
+      if (headerHasKnown) {
+        for (let j = 0; j < headerRaw.length; j++){
+          const key = headerRaw[j];
+          if (!key) continue;
+          // Skip columns already parsed
+          if (j === wi || j === di || j === ti) continue;
+          rowObj[key] = cols[j] || '';
+        }
+      }
+      out.push(rowObj);
+    }
   }
   return out;
 }
+  
 
 // File input -> parse JSON or CSV based on extension/MIME
 async function importDatasetFromFile(file) {
@@ -210,13 +292,16 @@ function saveSheetConfig(cfg){
   localStorage.setItem(SHEET_CFG_KEY, JSON.stringify(cfg||{}));
 }
 function loadSheetConfig(){
-  const DEFAULT_TRANSLATE_URL = 'https://script.google.com/macros/s/AKfycbwDFUlYoI4ody5Iy0qm1lP6WhkjFj15NnaFaEiNkx9p8ZAT7T67Y-ORJ-vonntOno2wFA/exec';
+  const DEFAULT_TRANSLATE_URL = APP_CFG.DEFAULT_TRANSLATE || '';
+  // Defaults (can be overridden by saved config)
+  const THIEN_CSV = APP_CFG.DEFAULT_CSV || '';
+  const THIEN_WRITE = APP_CFG.DEFAULT_WRITE || '';
   try{
     const cfg = JSON.parse(localStorage.getItem(SHEET_CFG_KEY) || '{}') || {};
     // Provide safe defaults without overwriting user's saved values
-    return Object.assign({ translateUrl: DEFAULT_TRANSLATE_URL }, cfg);
+    return Object.assign({ translateUrl: DEFAULT_TRANSLATE_URL, csvUrl: THIEN_CSV, writeUrl: THIEN_WRITE }, cfg);
   }catch{
-    return { translateUrl: DEFAULT_TRANSLATE_URL };
+    return { translateUrl: DEFAULT_TRANSLATE_URL, csvUrl: THIEN_CSV, writeUrl: THIEN_WRITE };
   }
 }
 async function fetchSheetCSV(url){
@@ -226,15 +311,64 @@ async function fetchSheetCSV(url){
   const text = await resp.text();
   return parseCSVToDataset(text);
 }
+
+// JSONP helper: loads a script with a callback parameter and resolves with the returned data
+function fetchJsonp(url, timeout = 9000){
+  return new Promise((resolve, reject) => {
+    if (!url) return reject(new Error('Missing url'));
+    const cb = '__jsonp_cb_' + Math.random().toString(36).slice(2);
+    const sep = url.indexOf('?') >= 0 ? '&' : '?';
+    const s = document.createElement('script');
+    let timer = null;
+    window[cb] = function(data){
+      clearTimeout(timer);
+      try{ delete window[cb]; }catch{}
+      s.remove();
+      resolve(data);
+    };
+    s.src = url + sep + 'callback=' + cb;
+    s.onerror = function(err){
+      clearTimeout(timer);
+      try{ delete window[cb]; }catch{}
+      s.remove();
+      reject(new Error('JSONP script load error'));
+    };
+    document.head.appendChild(s);
+    timer = setTimeout(() => {
+      try{ delete window[cb]; }catch{}
+      s.remove();
+      reject(new Error('JSONP timeout'));
+    }, timeout);
+  });
+}
 // Append rows to Apps Script endpoint
 // rows: Array<{word, definitions: string[]}>; server decides how to store
 async function appendRowsToSheet(endpoint, rows){
   if (!endpoint) throw new Error('Thiếu Apps Script URL');
+  // If this looks like an Apps Script endpoint and a user is set, append the user param
+  try{
+    const user = loadUser();
+    if (user && endpoint.indexOf('script.google.com') >= 0) {
+      // only append if no existing user param
+      if (endpoint.indexOf('user=') === -1) {
+        endpoint = endpoint + (endpoint.indexOf('?') >= 0 ? '&' : '?') + 'user=' + encodeURIComponent(user);
+      }
+    }
+  }catch(e){ /* ignore */ }
   const compact = rows.map(r => {
     if (r && r.type === 'feedback') {
       return { type: 'feedback', message: r.message || '', ctx: r.ctx || '', user: r.user || '' };
     }
-    return { word: r.word, definitions: (r.definitions||[]).join('; ') };
+    const out = {};
+    for (const k in r){
+      if (!Object.prototype.hasOwnProperty.call(r,k)) continue;
+      if (k === 'definitions') out.definitions = (r.definitions||[]).join('; ');
+      else out[k] = r[k];
+    }
+    // ensure word + definitions exist
+    if (!out.word && r.word) out.word = r.word;
+    if (!out.definitions && r.definitions) out.definitions = (r.definitions||[]).join('; ');
+    return out;
   });
   // Use form-urlencoded to avoid CORS preflight to Apps Script
   const body = 'rows=' + encodeURIComponent(JSON.stringify(compact));
@@ -281,6 +415,8 @@ window.LE = {
   saveSheetConfig,
   loadSheetConfig,
   fetchSheetCSV,
+  loadDefaultDataset,
+  fetchJsonp,
   appendRowsToSheet,
 };
 

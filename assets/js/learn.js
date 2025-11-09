@@ -12,6 +12,7 @@
   const confettiCanvas = document.getElementById('confettiCanvas');
   const statCorrect = document.getElementById('statCorrect');
   const statWrong = document.getElementById('statWrong');
+  
   const btnResetProgress = document.getElementById('btnResetProgress');
   const btnSendFeedback = document.getElementById('btnSendFeedback');
   const feedbackText = document.getElementById('feedbackText');
@@ -44,6 +45,11 @@
   const AUTO_TRANS_KEY = 'fs_auto_trans';
   let lastSpeakParts = [];
   let lastSfxPromise = Promise.resolve();
+  // SRS store
+  let srsStore = {};
+  let srsQueue = []; // array of word keys (due first then new)
+  const DAILY_NEW_LIMIT_KEY = 'fs_srs_daily_new_limit';
+  const DEFAULT_DAILY_NEW_LIMIT = 20;
 
   function loadProgress(){
     try{ progress = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}') || {}; }
@@ -64,6 +70,22 @@
     statWrong.textContent = String(wrongCount);
   }
 
+  // Helper: determine if an item is marked selected for practice
+  function itemIsSelected(item){
+    if (!item) return false;
+    try{
+      if (item.selectedForStudy === '1' || item.selectedForStudy === 1 || item.selectedForStudy === true) return true;
+      if (item.selected === '1' || item.selected === 1 || item.selected === true) return true;
+      for (const k in item){
+        if (!k) continue;
+        if (k.toLowerCase().includes('select')){
+          const v = item[k]; if (v === '1' || v === 1 || String(v).toLowerCase() === 'true') return true;
+        }
+      }
+    }catch(e){}
+    return false;
+  }
+
   function setQuestion(index){
     const item = dataset[index];
     const defs = item.definitions || [];
@@ -80,6 +102,7 @@
     // reset post-answer area
     if (postAnswer){ postAnswer.hidden = true; }
     if (translationBox){ translationBox.innerHTML = ''; }
+    
   }
 
   function renderAnswerUI(index){
@@ -193,6 +216,79 @@
 
     // Post-answer: read aloud and show translation
     try{ doPostAnswer(item, ok); }catch{}
+    // Auto-schedule SRS based on result (no manual quality selection)
+    try{ autoSchedule(item, ok, p); }catch{}
+  }
+  
+  // Auto-schedule SRS after each answer (no manual quality selection)
+  function autoSchedule(item, ok, progressEntry){
+    if (!item || !window.SRS) return;
+    const wordKey = keyForWord(item.word);
+    const card = SRS.ensureCard(srsStore, item.word);
+    if (!card) return;
+    // Heuristic for mapping result -> quality
+    // If correct: boost quality depending on recent streak
+    // If incorrect: schedule again or hard depending on whether it's first encounter
+    let quality = 4; // default Good
+    try{
+      const streak = (progressEntry && progressEntry.streak) ? progressEntry.streak : 0;
+      if (ok){
+        if (streak >= 3) quality = 5; // Easy if long streak
+        else if (streak === 0) quality = 4; // first correct -> Good
+        else quality = 4; // modest boost
+      } else {
+        // incorrect
+        const seen = (progressEntry && progressEntry.seen) ? progressEntry.seen : 0;
+        if (seen <= 1) quality = 0; // Again for brand-new items
+        else quality = 2; // Hard otherwise
+      }
+    }catch(e){ quality = ok ? 4 : 0; }
+
+    try{
+      SRS.schedule(card, quality);
+      srsStore[keyForWord(item.word)] = card;
+      SRS.saveStore(srsStore);
+    }catch(e){ console.warn('SRS schedule failed', e); }
+
+    // Best-effort: push SRS update to configured Sheet so other devices can pick it up
+    try{
+      const writeUrl = (sheetCfg && sheetCfg.writeUrl) || '';
+      if (writeUrl && window.LE && LE.appendRowsToSheet){
+        LE.appendRowsToSheet(writeUrl, [{ word: item.word, definitions: item.definitions || [], addedAt: card.addedAt, reps: card.reps, lapses: card.lapses, ease: card.ease, interval: card.interval, due: card.due, lastReview: card.lastReview }])
+          .catch(()=>{});
+      }
+    }catch(e){ /* ignore */ }
+    // move to next due/new card
+    advanceSRSQueue();
+  }
+
+  function buildSRSQueue(){
+    if (!(window.SRS)) return [];
+    const dailyLimit = parseInt(localStorage.getItem(DAILY_NEW_LIMIT_KEY),10);
+    const limit = isNaN(dailyLimit) ? DEFAULT_DAILY_NEW_LIMIT : dailyLimit;
+    const dailyReviewLimit = parseInt(localStorage.getItem('fs_srs_daily_review_limit'),10) || 0;
+    // If user has selected specific words for practice, build queue only from those
+    const hasSelection = dataset.some(itemIsSelected);
+    const practiceDataset = hasSelection ? dataset.filter(d => itemIsSelected(d)) : dataset;
+    const result = SRS.buildQueue(practiceDataset, { dailyNewLimit: limit, dailyReviewLimit });
+    srsQueue = result.combined; // store word keys
+  }
+
+  function advanceSRSQueue(){
+    // remove current word key
+    const currentWord = (current >=0 && dataset[current]) ? keyForWord(dataset[current].word) : null;
+    if (currentWord){
+      srsQueue = srsQueue.filter(k => k !== currentWord);
+    }
+    // Rebuild queue to include any newly due cards (e.g., Again after 10m) but skip immediate if due not yet passed
+    buildSRSQueue();
+    // pick next by mapping word key to index
+    for (const wk of srsQueue){
+      const idx = dataset.findIndex(d => keyForWord(d.word) === wk);
+      if (idx >= 0){ current = idx; setQuestion(idx); return; }
+    }
+    // fallback: use weight-based selection
+    nextQuestion();
   }
 
   function containsVietnamese(text){
@@ -286,7 +382,10 @@
   function computeWeights(){
     const now = Date.now();
     const FIFTEEN_MIN = 15 * 60 * 1000;
+    const hasSelection = dataset.some(itemIsSelected);
     return dataset.map((item, idx) => {
+      // If user has explicitly selected some words, skip unselected ones
+      if (hasSelection && !itemIsSelected(item)) return 0.0;
       const k = keyForWord(item.word);
       const p = progress[k] || { seen:0, correct:0, wrong:0, lastSeen:0, streak:0 };
       let w = 1;
@@ -303,6 +402,24 @@
   function pickNextIndex(){
     if (!dataset.length) return -1;
     const weights = computeWeights();
+    const hasSelection = dataset.some(itemIsSelected);
+    // If selection exists, only pick among selected indices
+    if (hasSelection){
+      const allowed = weights.map((w,i) => (itemIsSelected(dataset[i]) ? w : 0));
+      const total = allowed.reduce((a,b)=>a+b,0);
+      if (!isFinite(total) || total <= 0){
+        // fallback: pick any selected index uniformly
+        const selIdx = dataset.map((d,i)=> itemIsSelected(d) ? i : -1).filter(i=>i>=0);
+        if (!selIdx.length) return -1;
+        return selIdx[Math.floor(Math.random()*selIdx.length)];
+      }
+      let r = Math.random() * total;
+      for (let i=0;i<allowed.length;i++){
+        if ((r -= allowed[i]) <= 0) return i;
+      }
+      return Math.floor(Math.random()*dataset.length);
+    }
+    // Default: pick among all
     let total = weights.reduce((a,b)=>a+b,0);
     if (!isFinite(total) || total <= 0) return Math.floor(Math.random()*dataset.length);
     let r = Math.random() * total;
@@ -314,10 +431,14 @@
 
   function nextQuestion(){
     if (!dataset.length) return;
+    // Prefer SRS queue
+    if (srsQueue && srsQueue.length){
+      const wk = srsQueue[0];
+      const idx = dataset.findIndex(d => keyForWord(d.word) === wk);
+      if (idx >= 0){ current = idx; setQuestion(idx); return; }
+    }
     const next = pickNextIndex();
-    if (next < 0) return;
-    current = next;
-    setQuestion(current);
+    if (next < 0) return; current = next; setQuestion(current);
   }
 
   function reshuffle(){
@@ -394,6 +515,8 @@
 
   async function init(){
     loadProgress();
+    // Ensure we have a username before loading dataset
+    try{ ensureUserPrompt('thienpahm'); }catch{}
     // Load toggles from localStorage
     try{
       const tts = localStorage.getItem(AUTO_TTS_KEY); if (toggleTTS && tts !== null) toggleTTS.checked = tts === '1';
@@ -486,24 +609,20 @@
         try{ localStorage.setItem(FEEDBACK_USER_KEY, (feedbackUser.value||'').trim()); }catch{}
       });
     }catch{}
-  // Always prefer Local Storage; if empty, bootstrap from vocab.json into Local
-    dataset = await LE.loadDataset();
-    if (!Array.isArray(dataset) || dataset.length === 0) {
-      const fileData = await LE.loadDatasetFromFile();
-      if (Array.isArray(fileData) && fileData.length) {
-        LE.saveDatasetToLocal(fileData);
-        dataset = fileData;
-      } else {
-        dataset = [];
-      }
-    }
+    // Load dataset from Google Sheet (Sheet is the single source of truth)
+    try{
+      dataset = await LE.loadDataset();
+    }catch(err){ dataset = []; console.warn('LE.loadDataset failed', err); }
     if (!Array.isArray(dataset)) dataset = [];
     if (dataset.length === 0) {
-      questionText.textContent = 'Chưa có dữ liệu. Hãy vào trang Nhập dữ liệu để thêm từ.';
+      questionText.textContent = 'Chưa có dữ liệu từ Sheet. Vui lòng cấu hình Google Sheet trong trang Nhập dữ liệu.';
       qIndex.textContent = '0/0';
       return;
     }
     reshuffle();
+    // Load SRS progress
+    try{ srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {}; }catch{ srsStore = {}; }
+    buildSRSQueue();
 
     // No auto-refresh from Sheet; use the reload button to refresh from file
     // attempt to flush any pending feedback if write URL is available

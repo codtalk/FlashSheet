@@ -15,6 +15,7 @@
   const btnFullscreen = document.getElementById('btnFullscreen');
   const btnSlidePrev = document.getElementById('btnSlidePrev');
   const btnSlideNext = document.getElementById('btnSlideNext');
+  const btnSelectForPractice = document.getElementById('btnSelectForPractice');
 
   let fsBackdrop = null;
 
@@ -129,6 +130,15 @@
       fcExplain.innerHTML = '';
     }
     updateIndex();
+    // update select-for-practice button state
+    try{
+      const item = dataset[cur];
+      const isSelected = (item && (item.selectedForStudy === '1' || item.selectedForStudy === 1 || item.selectedForStudy === true || item.selected === '1' || item.selected === true));
+      if (btnSelectForPractice){
+        btnSelectForPractice.disabled = !!isSelected;
+        btnSelectForPractice.textContent = isSelected ? 'Đã chọn' : 'Học từ này';
+      }
+    }catch(e){ /* ignore */ }
     // trigger fade animation after content changes
     if (flipCard){
       // force reflow
@@ -194,17 +204,22 @@
   }
 
   async function init(){
-    // load dataset from local, fallback to file
+    // Ensure username exists and then load dataset from Google Sheet (per-user)
+    try{ ensureUserPrompt('thienpahm'); }catch{}
     try{
-      dataset = await LE.loadDataset();
-      if (!Array.isArray(dataset) || dataset.length === 0){
-        const fromFile = await LE.loadDatasetFromFile();
-        if (Array.isArray(fromFile) && fromFile.length){
-          LE.saveDatasetToLocal(fromFile);
-          dataset = fromFile;
-        } else { dataset = []; }
-      }
-    }catch{ dataset = []; }
+      // Load the shared/default sheet for the study (public) view
+      dataset = await LE.loadDefaultDataset();
+    }catch(err){ dataset = []; console.warn('LE.loadDefaultDataset failed', err); }
+    if (!Array.isArray(dataset)) dataset = [];
+    if (dataset.length === 0){
+      // No data available from Sheet — show helpful message
+      fcWord.textContent = 'Chưa có dữ liệu từ Sheet. Vui lòng cấu hình Google Sheet trong trang Nhập dữ liệu.';
+      fcDefs.innerHTML = '';
+      fcMeaning.textContent = '';
+      fcExplain.textContent = '';
+      updateIndex();
+      return;
+    }
     // TTS availability
     try{
       const supported = !!(window.LE && LE.tts && LE.tts.supported && LE.tts.supported());
@@ -224,6 +239,49 @@
     cur = order[0] || 0;
     render();
   }
+
+  // Helper: determine if an item is marked selected for practice
+  function itemIsSelected(item){
+    if (!item) return false;
+    try{
+      if (item.selectedForStudy === '1' || item.selectedForStudy === 1 || item.selectedForStudy === true) return true;
+      if (item.selected === '1' || item.selected === 1 || item.selected === true) return true;
+      // also check any property containing "select"
+      for (const k in item){
+        if (!k) continue;
+        if (k.toLowerCase().includes('select')){
+          const v = item[k]; if (v === '1' || v === 1 || String(v).toLowerCase() === 'true') return true;
+        }
+      }
+    }catch(e){}
+    return false;
+  }
+
+  // Select current word for practice: mark locally, push to Sheet (best-effort), and navigate to practice tab
+  btnSelectForPractice?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!dataset || dataset.length === 0) { showToast('Không có từ để chọn', 'error'); return; }
+    const item = dataset[cur];
+    if (!item || !item.word) { showToast('Không có từ để chọn', 'error'); return; }
+    if (itemIsSelected(item)) { showToast('Từ đã được chọn', 'success'); return; }
+  // Mark in-memory and persist to Sheet (Sheet is source of truth)
+  item.selectedForStudy = '1';
+    showToast('Đã chọn từ để học. Đang lưu…', 'success');
+    // Best-effort push to configured Apps Script write URL
+    try{
+      const cfg = (LE.loadSheetConfig && LE.loadSheetConfig()) || {};
+      const writeUrl = cfg.writeUrl || '';
+      if (writeUrl){
+        // include SRS fields if available
+        const srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {};
+        const srs = srsStore[(item.word||'').toLowerCase()] || {};
+        const row = Object.assign({ word: item.word, definitions: item.definitions || [], selectedForStudy: '1' }, srs);
+        await LE.appendRowsToSheet(writeUrl, [row]);
+      }
+    }catch(err){ console.warn('Persist selection to Sheet failed', err); }
+    // Move user to practice tab
+    try{ window.location.href = 'index.html'; }catch(e){}
+  });
 
   // events
   flipCard?.addEventListener('click', flip);

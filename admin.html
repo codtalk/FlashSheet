@@ -52,6 +52,22 @@
       <p class="hint">Dữ liệu mặc định lưu trong Local Storage. Nên cấu hình Google Sheet để đồng bộ giữa các thiết bị. Nút “Đồng bộ” sẽ tải từ Sheet về và đẩy các từ mới từ Local lên Sheet (không xoá dữ liệu ở hai phía).</p>
     </section>
 
+    <section class="io-panel" id="srs-config">
+      <h2>Cài đặt học nhắc lại (SRS)</h2>
+      <div class="form-row">
+        <label for="dailyNewLimit">Số từ mới mỗi ngày</label>
+        <input type="number" id="dailyNewLimit" class="answer-input" value="20" min="0" />
+      </div>
+      <div class="form-row">
+        <label for="dailyReviewLimit">Giới hạn ôn lại mỗi ngày (0 = không giới hạn)</label>
+        <input type="number" id="dailyReviewLimit" class="answer-input" value="0" min="0" />
+      </div>
+      <div class="io-actions">
+        <button id="btnSaveSrsCfg" class="btn secondary">Lưu cài đặt SRS</button>
+      </div>
+      <p class="hint">Mỗi ngày khi mở trang Luyện tập, ứng dụng sẽ xếp hàng ôn tập theo lịch (thẻ đến hạn trước, sau đó giới thiệu tối đa số từ mới).</p>
+    </section>
+
     
 
     <section class="io-panel" id="sheet-config">
@@ -108,7 +124,9 @@
     <span>Quay lại tab “Luyện tập” để ôn tập nhanh, hoặc tab “Học từ” để xem flashcard.</span>
   </footer>
 
+  <script src="assets/js/config.js"></script>
   <script src="assets/js/utils.js"></script>
+  <script src="assets/js/srs.js"></script>
   <script src="assets/js/admin.js"></script>
 </body>
 </html>

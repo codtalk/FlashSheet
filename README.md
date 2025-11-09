@@ -8,9 +8,36 @@
   - `index.html`: Tab "Luyện tập" — Ôn tập với chế độ nhập đáp án, trắc nghiệm, hoặc trộn; câu hỏi ngẫu nhiên; hiệu ứng khi trả lời đúng (confetti, glow). Theo dõi số câu đúng/sai.
   - `admin.html`: Tab "Nhập dữ liệu" — Thêm nhiều mô tả (định nghĩa) cho một từ, đồng bộ Google Sheet.
 - Dữ liệu lưu:
-  - Ưu tiên Local Storage trình duyệt (không cần server).
-  - Có thể nhập file JSON (đặt vào thư mục `data/vocab.json`) hoặc dùng nút tải JSON.
+ - Dữ liệu lưu:
+  - Google Sheet (CSV) là nguồn dữ liệu duy nhất/ưu tiên. Ứng dụng sẽ tải dữ liệu từ Sheet khi mở.
+  - (SRS được đồng bộ qua Google Sheet; không cần Excel thủ công.)
 - Thiết kế giao diện hiện đại, dễ nhìn, có animation nhỏ.
+### Học ngắt quãng (SRS giống Anki)
+Trang `index.html` (Luyện tập) sau khi bạn trả lời sẽ hiển thị 4 nút chất lượng nhớ:
+
+| Mức | Ý nghĩa | Nội bộ SM-2 |
+|-----|---------|------------|
+| Again | Quên hoàn toàn / sai | quality = 0 → lên lịch lại sau ~10 phút |
+| Hard  | Nhớ khó khăn         | quality = 2 |
+| Good  | Nhớ bình thường      | quality = 4 |
+| Easy  | Rất dễ / tự tin      | quality = 5 |
+
+Thuật toán (SM-2 rút gọn):
+1. Mỗi thẻ có: `addedAt, reps, lapses, ease (EF), interval (days), due, lastReview`.
+2. Nếu quality < 3: đặt `reps = 0`, tăng `lapses`, `interval = 1 ngày`, `due = now + 10 phút` (ôn nóng).
+3. Nếu quality ≥ 3:
+  - `interval = 1` (lần đầu) → `6` (lần thứ hai) → sau đó `interval = round(interval * ease)`.
+  - Cập nhật `ease = max(1.3, ease + (0.1 - (5 - quality) * (0.08 + (5 - quality)*0.02)))`.
+4. `due = now + interval * 1 ngày` (hoặc 10 phút với Again).
+
+Hàng ngày khi mở trang, app tạo hàng đợi: thẻ đến hạn (due <= hiện tại) trước, sau đó thêm tối đa X từ mới (chưa từng ôn) theo giới hạn bạn đặt ở `admin.html` → “Cài đặt SRS”. Các thẻ mới khi được ôn lần đầu sẽ nhận `addedAt` và vào vòng lặp SRS.
+
+Bạn có thể chỉnh:
+- Số từ mới mỗi ngày (`fs_srs_daily_new_limit`).
+- Giới hạn số ôn lại mỗi ngày (`fs_srs_daily_review_limit` — hiện chưa chặn cứng, dành cho thống kê về sau).
+
+Lưu ý: Trạng thái SRS có thể được lưu/đọc trực tiếp từ Google Sheet nếu bạn thêm các cột tương ứng (`addedAt, reps, lapses, ease, interval, due, lastReview`) trong Sheet và Apps Script sẽ đọc/ghi các cột này.
+
  - Âm thanh phản hồi: phát ngẫu nhiên một âm từ thư mục `sounds/trues/` (đúng) hoặc `sounds/falses/` (sai).
  - TTS (đọc to): chỉ đọc từ/câu tiếng Anh, không đọc phần dịch tiếng Việt.
  - TTS:
@@ -31,6 +58,7 @@ learnEnglish/
 │  ├─ css/styles.css
 │  └─ js/{utils.js, admin.js, learn.js, study.js}
 └─ data/vocab.json   # Dữ liệu mẫu
+└─ (no local data file) — ứng dụng tải dữ liệu từ Google Sheet
 ```
 
 ## Chạy trên máy
@@ -76,7 +104,7 @@ apple,A round fruit,Quả táo
 
 ## Đồng bộ giữa các thiết bị (Google Sheet)
 
-Ứng dụng chỉ dùng Google Sheet để đồng bộ hoá, không cần server riêng:
+Ứng dụng dùng Google Sheet để đồng bộ hoá từ vựng cơ bản (word + definitions). Ứng dụng cũng hỗ trợ đọc/ghi các cột trạng thái SRS (`addedAt, reps, lapses, ease, interval, due, lastReview`) nếu Apps Script của bạn được cấu hình để lưu các cột này — do đó không cần làm thủ công qua Excel.
 
 1) Đọc tự động từ Google Sheet (CSV)
 - Trong Google Sheets: File → Share → Publish to web → chọn sheet cụ thể → định dạng CSV → Publish → Copy URL (dạng ...&output=csv, không có dấu ";" ở cuối).
@@ -95,7 +123,7 @@ apple,A round fruit,Quả táo
   - App tính phần chênh: những định nghĩa ở Local mà Sheet chưa có → đẩy lên Sheet bằng các dòng append mới (không xoá gì trên Sheet).
   - Kết quả: Cả hai phía đều tăng thêm dữ liệu mới, không mất chữ.
 
-Mẫu Apps Script (Code.gs) — ghi từ vào 'Sheet1' và góp ý vào 'Feedback' (khuyên dùng form-urlencoded để tránh CORS preflight):
+Mẫu Apps Script (Code.gs) — ghi từ vào 'Sheet1' và góp ý vào 'Feedback' (khuyên dùng form-urlencoded để tránh CORS preflight). Muốn mở rộng để lưu SRS bạn có thể thêm các cột (`addedAt, reps, lapses, ease, interval, due, lastReview`) và ghi chúng khi POST gửi đầy đủ.
 ```javascript
 function doPost(e) {
   try {
@@ -124,13 +152,21 @@ function doPost(e) {
         var user = r.user || '';
         fbValues.push([now, user, msg, ctx]);
       } else {
-        mainValues.push([now, word, defs]);
+        // Accept optional SRS fields from client and write them as extra columns
+        var addedAt = r.addedAt !== undefined ? r.addedAt : '';
+        var reps = r.reps !== undefined ? r.reps : '';
+        var lapses = r.lapses !== undefined ? r.lapses : '';
+        var ease = r.ease !== undefined ? r.ease : '';
+        var interval = r.interval !== undefined ? r.interval : '';
+        var due = r.due !== undefined ? r.due : '';
+        var lastReview = r.lastReview !== undefined ? r.lastReview : '';
+        mainValues.push([now, word, defs, addedAt, reps, lapses, ease, interval, due, lastReview]);
       }
     });
 
     if (mainValues.length){
-      if (main.getLastRow() === 0) main.appendRow(['timestamp','word','definition']);
-      main.getRange(main.getLastRow()+1, 1, mainValues.length, 3).setValues(mainValues);
+      if (main.getLastRow() === 0) main.appendRow(['timestamp','word','definition','addedAt','reps','lapses','ease','interval','due','lastReview']);
+      main.getRange(main.getLastRow()+1, 1, mainValues.length, 10).setValues(mainValues);
     }
     if (fbValues.length){
       if (fb.getLastRow() === 0) fb.appendRow(['timestamp','user','message','context']);
@@ -166,7 +202,7 @@ Nếu trả 200/ok thì Web App nhận tốt.
 
 ## Ghi chú
 - Nút "Lưu vào thư mục data" dùng File System Access API (Chrome/Edge). Safari hiện chưa hỗ trợ.
-- Nếu bạn muốn dùng Excel, hãy xuất ra CSV rồi dùng công cụ chuyển thành JSON theo định dạng trên.
+- Nếu bạn muốn đồng bộ trạng thái SRS, hãy cấu hình Apps Script để chấp nhận các cột SRS (xem mẫu ở trên).
 
 ### Tuỳ biến âm thanh phản hồi
 - Thêm/xoá file trong `sounds/trues/` (âm đúng) hoặc `sounds/falses/` (âm sai). Ứng dụng sẽ chọn ngẫu nhiên mỗi lần trả lời.
@@ -199,3 +235,5 @@ Triển khai: Deploy → New deployment → Type: Web app → Execute as: Me →
 
 Tính năng bổ xung sau:
 - Tích hợp ai đọc từ; cụm;
+ - Đồng bộ trực tiếp trạng thái SRS qua Google Sheet (thêm Apps Script đọc/ghi đầy đủ cột)
+ - Bộ phân tích thống kê: số ôn lại/ngày, đường cong nhớ, dự báo khối lượng hôm sau.
