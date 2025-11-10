@@ -4,6 +4,7 @@
   const fcIndex = document.getElementById('fcIndex');
   const fcIndexBack = document.getElementById('fcIndexBack');
   const fcWord = document.getElementById('fcWord');
+  const fcPos = document.getElementById('fcPos');
   const fcImage = document.getElementById('fcImage');
   const fcDefs = document.getElementById('fcDefs');
   const fcMeaning = document.getElementById('fcMeaning');
@@ -56,6 +57,44 @@
     return firstNonCloze || defs[0];
   }
 
+  // Return a short normalized POS label (e.g. "n.", "v.", "adj.") if available
+  function getPosLabel(item){
+    if (!item) return '';
+    const keys = ['pos','posTag','type','wordClass','tuloai','class'];
+    let raw = '';
+    for (const k of keys){
+      if (!k) continue;
+      if (Object.prototype.hasOwnProperty.call(item, k) && item[k] != null){ raw = String(item[k]).trim(); if (raw) break; }
+      // also check case-insensitive property names
+      for (const pk in item){ if (pk.toLowerCase() === k.toLowerCase() && item[pk] != null){ raw = String(item[pk]).trim(); if (raw) break; } }
+      if (raw) break;
+    }
+    if (!raw) return '';
+    const lower = raw.toLowerCase();
+    const map = {
+      'noun': 'n.', 'n': 'n.', 'n.': 'n.',
+      'verb': 'v.', 'v': 'v.', 'v.': 'v.',
+      'adjective': 'adj.', 'adj': 'adj.', 'adj.': 'adj.', 'a': 'adj.',
+      'adverb': 'adv.', 'adv': 'adv.', 'adv.': 'adv.',
+      'pronoun': 'pron.', 'pron': 'pron.',
+      'preposition': 'prep.', 'prep': 'prep.',
+      'conjunction': 'conj.', 'conj': 'conj.',
+      'interjection': 'intj.', 'intj': 'intj.',
+      'determiner': 'det.', 'det': 'det.', 'article': 'art.', 'art': 'art.',
+      'numeral': 'num.', 'num': 'num.'
+    };
+    // try exact map
+    if (map[lower]) return map[lower];
+    // try tokenized
+    const tokens = lower.split(/\s|,|;|\//).map(t=>t.trim()).filter(Boolean);
+    for (const t of tokens){ if (map[t]) return map[t]; }
+    // fallback: if short (<=4) return as-is (with a dot)
+    if (lower.length <= 4) return lower.endsWith('.') ? lower : (lower + '.');
+    // else return original trimmed but shortened to first word
+    const first = tokens[0] || lower;
+    return first.length <= 6 ? (first.endsWith('.') ? first : first + '.') : '';
+  }
+
   function fillCloze(text, word){
     const w = (word||'').toString();
     if (!text) return '';
@@ -102,6 +141,8 @@
     }
     const item = dataset[cur];
     fcWord.textContent = item.word || '';
+  // show POS if available
+  try{ const p = getPosLabel(item); if (fcPos){ fcPos.textContent = p; fcPos.hidden = !p; } }catch(e){}
     // image
     const img = imageFromItem(item);
     if (img){

@@ -26,6 +26,7 @@
   const translationBox = document.getElementById('translation');
   const btnReplayTTS = document.getElementById('btnReplayTTS');
   const btnTransReadSentence = document.getElementById('btnTransReadSentence');
+  const questionPos = document.getElementById('questionPos');
 
   let dataset = [];
   let queue = []; // array of indices
@@ -123,6 +124,8 @@
       }catch(e){ displayed = ex; }
     }
     questionText.textContent = displayed;
+  // show pos if available
+  try{ const p = getPosLabel(item); if (questionPos){ questionPos.textContent = p; questionPos.hidden = !p; } }catch(e){}
     lastDef = displayed;
     qIndex.textContent = `${queue.indexOf(index)+1}/${queue.length}`;
 
@@ -331,6 +334,39 @@
   function isEnglish(text){
     const t = (text||'').toString();
     return !containsVietnamese(t) && /[A-Za-z]/.test(t);
+  }
+
+  // Return a short normalized POS label (e.g. "n.", "v.", "adj.") if available
+  function getPosLabel(item){
+    if (!item) return '';
+    const keys = ['pos','posTag','type','wordClass','tuloai','class'];
+    let raw = '';
+    for (const k of keys){
+      if (!k) continue;
+      if (Object.prototype.hasOwnProperty.call(item, k) && item[k] != null){ raw = String(item[k]).trim(); if (raw) break; }
+      for (const pk in item){ if (pk.toLowerCase() === k.toLowerCase() && item[pk] != null){ raw = String(item[pk]).trim(); if (raw) break; } }
+      if (raw) break;
+    }
+    if (!raw) return '';
+    const lower = raw.toLowerCase();
+    const map = {
+      'noun': 'n.', 'n': 'n.', 'n.': 'n.',
+      'verb': 'v.', 'v': 'v.', 'v.': 'v.',
+      'adjective': 'adj.', 'adj': 'adj.', 'adj.': 'adj.', 'a': 'adj.',
+      'adverb': 'adv.', 'adv': 'adv.', 'adv.': 'adv.',
+      'pronoun': 'pron.', 'pron': 'pron.',
+      'preposition': 'prep.', 'prep': 'prep.',
+      'conjunction': 'conj.', 'conj': 'conj.',
+      'interjection': 'intj.', 'intj': 'intj.',
+      'determiner': 'det.', 'det': 'det.', 'article': 'art.', 'art': 'art.',
+      'numeral': 'num.', 'num': 'num.'
+    };
+    if (map[lower]) return map[lower];
+    const tokens = lower.split(/\s|,|;|\//).map(t=>t.trim()).filter(Boolean);
+    for (const t of tokens){ if (map[t]) return map[t]; }
+    if (lower.length <= 4) return lower.endsWith('.') ? lower : (lower + '.');
+    const first = tokens[0] || lower;
+    return first.length <= 6 ? (first.endsWith('.') ? first : first + '.') : '';
   }
 
   function buildFilledSentence(item){
