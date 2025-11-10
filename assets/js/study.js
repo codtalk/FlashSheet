@@ -323,8 +323,10 @@
         await LE.appendRowsToSheet(writeUrl, [row]);
       }
     }catch(err){ console.warn('Persist selection to Sheet failed', err); }
-    // Move user to practice tab
-    try{ window.location.href = 'index.html'; }catch(e){}
+  // Previously we auto-redirected the user to the practice tab here.
+  // Keep the user on the Study page after selecting a word for practice so they can continue browsing.
+  // If you want to navigate programmatically, you can uncomment the line below.
+  // try{ window.location.href = 'index.html'; }catch(e){}
   });
 
   // events
