@@ -259,6 +259,8 @@
       dataset = await LE.loadDefaultDataset();
     }catch(err){ dataset = []; console.warn('LE.loadDefaultDataset failed', err); }
     if (!Array.isArray(dataset)) dataset = [];
+    // Hide items previously marked for study across devices (via shared sheet flag)
+    try{ dataset = dataset.filter(d => !itemIsSelected(d)); }catch(e){ console.warn('Filter selectedForStudy in study failed', e); }
     if (dataset.length === 0){
       // No data available from Sheet — show helpful message
       fcWord.textContent = 'Chưa có dữ liệu từ Sheet. Vui lòng cấu hình Google Sheet trong trang Nhập dữ liệu.';
@@ -314,17 +316,40 @@
     if (itemIsSelected(item)) { showToast('Từ đã được chọn', 'success'); return; }
   // Mark in-memory and persist to Sheet (Sheet is source of truth)
   item.selectedForStudy = '1';
-    showToast('Đã chọn từ để học. Đang lưu…', 'success');
+    showToast('Đã chọn từ để học. Đang chuyển…', 'success');
+    // Immediately hide this card from Study tab and move to next
+    try{
+      // Remove current item from dataset
+      dataset.splice(cur, 1);
+      // Rebuild order over remaining items
+      order = Array.from({length: dataset.length}, (_,i)=>i);
+      // Clamp current index and render next card
+      if (dataset.length > 0){
+        if (cur >= dataset.length) cur = 0;
+        render();
+      } else {
+        // No items left: clear UI
+        fcWord.textContent = 'Đã ẩn tất cả các thẻ đã chọn để học.';
+        fcDefs.innerHTML = '';
+        fcMeaning.textContent = '';
+        fcExplain.textContent = '';
+        updateIndex();
+      }
+    }catch(remErr){ console.warn('Remove & advance failed', remErr); }
     // Best-effort push to configured Apps Script write URL
     try{
       const cfg = (LE.loadSheetConfig && LE.loadSheetConfig()) || {};
-      const writeUrl = cfg.writeUrl || '';
-      if (writeUrl){
+      let endpoint = cfg.writeUrl || '';
+      if (endpoint){
         // include SRS fields if available
         const srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {};
     const srs = srsStore[(item.word||'').toLowerCase()] || {};
   const row = Object.assign({ word: item.word, meanings: (item.meanings || []), examples: (item.examples || []), selectedForStudy: '1' }, srs);
-        await LE.appendRowsToSheet(writeUrl, [row]);
+        // Force write to DEFAULT sheet (shared) by appending empty user param so utils won't add user=name
+        if (endpoint && endpoint.indexOf('script.google.com') >= 0){
+          if (endpoint.indexOf('user=') === -1) endpoint = endpoint + (endpoint.indexOf('?')>=0 ? '&' : '?') + 'user=';
+        }
+        await LE.appendRowsToSheet(endpoint, [row]);
       }
     }catch(err){ console.warn('Persist selection to Sheet failed', err); }
   // Previously we auto-redirected the user to the practice tab here.
