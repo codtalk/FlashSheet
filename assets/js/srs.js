@@ -1,28 +1,23 @@
 // srs.js - Spaced Repetition (SM-2 inspired) helpers
 (function(){
-  const SRS_KEY = 'fs_srs_progress_v1';
-  const DAILY_KEY = 'fs_srs_daily_stats_v1';
+  // Removed Local Storage persistence: Sheet is single source of truth.
+  // All SRS progress is kept in-memory and periodically written back to Sheet via appendRows.
   const DEFAULT_EASE = 2.5;
   const AGAIN_DELAY_MINUTES = 10; // schedule for "Again"
   const MIN_EASE = 1.3;
+
+  const internalStore = {}; // { wordKey: card }
+  let internalDaily = { date: null, newCount: 0 }; // ephemeral per day
 
   function todayKey(){
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
 
-  function loadStore(){
-    try{ return JSON.parse(localStorage.getItem(SRS_KEY) || '{}') || {}; }catch{ return {}; }
-  }
-  function saveStore(store){
-    try{ localStorage.setItem(SRS_KEY, JSON.stringify(store||{})); }catch{}
-  }
-  function loadDaily(){
-    try{ return JSON.parse(localStorage.getItem(DAILY_KEY) || '{}') || {}; }catch{ return {}; }
-  }
-  function saveDaily(d){
-    try{ localStorage.setItem(DAILY_KEY, JSON.stringify(d||{})); }catch{}
-  }
+  function loadStore(){ return internalStore; }
+  function saveStore(_store){ /* no-op: persistence removed */ }
+  function loadDaily(){ return internalDaily; }
+  function saveDaily(d){ internalDaily = d; }
 
   function ensureCard(store, word){
     const k = (word||'').toLowerCase();
@@ -89,9 +84,12 @@
     const news = [];
     dataset.forEach(item => {
       const k = (item.word||'').toLowerCase();
-      if (store[k]){
-        if (store[k].due <= now) reviews.push(k);
-      } else if (daily.newCount < dailyNewLimit){
+      // If dataset already contains SRS columns (due/reps/etc), prefer them over internal store
+      const dueVal = (item.due !== undefined ? Number(item.due) : (store[k] ? store[k].due : 0)) || 0;
+      const repsVal = (item.reps !== undefined ? Number(item.reps) : (store[k] ? store[k].reps : 0)) || 0;
+      if (dueVal && dueVal <= now && repsVal >= 0){
+        reviews.push(k);
+      } else if (!store[k] && repsVal === 0 && daily.newCount < dailyNewLimit){
         news.push(k);
         daily.newCount += 1;
       }

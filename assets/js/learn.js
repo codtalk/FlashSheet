@@ -36,8 +36,9 @@
   let answered = false;
   let sheetCfg = LE.loadSheetConfig ? (LE.loadSheetConfig() || {}) : {};
   let refreshTimer = null;
-  const PROGRESS_KEY = 'fs_progress';
-  let progress = {}; // { [wordKey]: { seen, correct, wrong, lastSeen, streak } }
+  // Removed local persistence for progress: keep ephemeral in-memory only.
+  const PROGRESS_KEY = 'fs_progress'; // legacy key (unused)
+  let progress = {}; // { [wordKey]: { seen, correct, wrong, lastSeen, streak } } (in-memory)
   const FEEDBACK_BUF_KEY = 'fs_feedback_buffer';
   const FEEDBACK_USER_KEY = 'fs_feedback_user';
   let lastDef = '';
@@ -54,13 +55,8 @@
   const DAILY_NEW_LIMIT_KEY = 'fs_srs_daily_new_limit';
   const DEFAULT_DAILY_NEW_LIMIT = 20;
 
-  function loadProgress(){
-    try{ progress = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}') || {}; }
-    catch{ progress = {}; }
-  }
-  function saveProgress(){
-    try{ localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); } catch{}
-  }
+  function loadProgress(){ /* no-op: progress starts empty each session */ progress = {}; }
+  function saveProgress(){ /* no-op: persistence removed */ }
   function keyForWord(w){ return (w||'').toString().trim().toLowerCase(); }
   function touchProgress(word){
     const k = keyForWord(word);
@@ -571,13 +567,12 @@
   });
 
   btnResetProgress?.addEventListener('click', () => {
-    if (confirm('Xoá tiến độ học (thống kê và lịch nhắc lại)?')){
-      localStorage.removeItem(PROGRESS_KEY);
+    if (confirm('Xoá tiến độ học (thống kê phiên này)?')){
+      // Clear in-memory only
       loadProgress();
       correctCount = 0; wrongCount = 0; updateStats();
-      // render lại câu hiện tại để bỏ trạng thái đã trả lời
       if (current >= 0) setQuestion(current); else nextQuestion();
-      alert('Đã xoá tiến độ.');
+      alert('Đã xoá tiến độ tạm thời (không lưu local).');
     }
   });
 
@@ -689,8 +684,11 @@
     }
     reshuffle();
     // Load SRS progress
-    try{ srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {}; }catch{ srsStore = {}; }
-    buildSRSQueue();
+  try{ srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {}; }catch{ srsStore = {}; }
+  // Filter out words already selected for study (practice) so they don't appear here
+  try{ dataset = dataset.filter(d => !itemIsSelected(d)); }catch(e){ console.warn('Filter selectedForStudy failed', e); }
+  buildSRSQueue();
+  renderSRSCounts();
 
     // No auto-refresh from Sheet; use the reload button to refresh from file
     // attempt to flush any pending feedback if write URL is available
@@ -733,4 +731,38 @@
   }
 
   init();
+
+  // --- SRS Due Counts (render per level) ---
+  function renderSRSCounts(){
+    const el = document.getElementById('srsSummary');
+    if (!el) return;
+    if (!dataset || !dataset.length){ el.innerHTML = '<div class="label">Cần ôn: 0</div>'; return; }
+    const now = Date.now();
+    const buckets = { 'L1':0,'L2':0,'L3':0,'L4':0,'L5+':0 };
+    dataset.forEach(item => {
+      const reps = Number(item.reps)||0;
+      const due = Number(item.due)||0;
+      // Count only items that are due (or new without due set)
+      const isDue = !due || due <= now;
+      if (!isDue) return;
+      if (reps <= 0) buckets.L1++;
+      else if (reps === 1) buckets.L2++;
+      else if (reps === 2) buckets.L3++;
+      else if (reps === 3) buckets.L4++;
+      else buckets['L5+']++;
+    });
+    const total = Object.values(buckets).reduce((a,b)=>a+b,0);
+    el.innerHTML = `<div class="label">Cần ôn (${total})</div><div class="srs-levels">${Object.entries(buckets).map(([k,v])=>`<span class='badge srs-badge' data-level='${k}'>${k}: ${v}</span>`).join(' ')}</div>`;
+  }
+
+  // Re-render counts after scheduling updates
+  function afterSchedule(){
+    try{ renderSRSCounts(); }catch{}
+  }
+  // Monkey-patch autoSchedule to update counts after each scheduling
+  const origAutoSchedule = autoSchedule;
+  autoSchedule = function(item, ok, p){
+    try{ origAutoSchedule(item, ok, p); }catch(e){ console.warn('orig autoSchedule error', e); }
+    afterSchedule();
+  };
 })();

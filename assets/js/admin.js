@@ -8,6 +8,7 @@
   const btnAddExample = document.getElementById('btnAddExample');
   const wordForm = document.getElementById('wordForm');
   const wordInput = document.getElementById('wordInput');
+  const posInput = document.getElementById('posInput');
   const btnReset = document.getElementById('btnReset');
   const btnSync = document.getElementById('btnSync');
   const datasetInfo = document.getElementById('datasetInfo');
@@ -101,6 +102,39 @@
     }
   }
 
+  // Minimal POS label normalization (align with learn/study pages)
+  function getPosLabel(item){
+    if (!item) return '';
+    const keys = ['pos','posTag','type','wordClass','tuloai','class'];
+    let raw = '';
+    for (const k of keys){
+      if (!k) continue;
+      if (Object.prototype.hasOwnProperty.call(item, k) && item[k] != null){ raw = String(item[k]).trim(); if (raw) break; }
+      for (const pk in item){ if (pk.toLowerCase() === k.toLowerCase() && item[pk] != null){ raw = String(item[pk]).trim(); if (raw) break; } }
+      if (raw) break;
+    }
+    if (!raw) return '';
+    const lower = raw.toLowerCase();
+    const map = {
+      'noun': 'n.', 'n': 'n.', 'n.': 'n.',
+      'verb': 'v.', 'v': 'v.', 'v.': 'v.',
+      'adjective': 'adj.', 'adj': 'adj.', 'adj.': 'adj.', 'a': 'adj.',
+      'adverb': 'adv.', 'adv': 'adv.', 'adv.': 'adv.',
+      'pronoun': 'pron.', 'pron': 'pron.',
+      'preposition': 'prep.', 'prep': 'prep.',
+      'conjunction': 'conj.', 'conj': 'conj.',
+      'interjection': 'intj.', 'intj': 'intj.',
+      'determiner': 'det.', 'det': 'det.', 'article': 'art.', 'art': 'art.',
+      'numeral': 'num.', 'num': 'num.'
+    };
+    if (map[lower]) return map[lower];
+    const tokens = lower.split(/\s|,|;|\//).map(t=>t.trim()).filter(Boolean);
+    for (const t of tokens){ if (map[t]) return map[t]; }
+    if (lower.length <= 4) return lower.endsWith('.') ? lower : (lower + '.');
+    const first = tokens[0] || lower;
+    return first.length <= 6 ? (first.endsWith('.') ? first : first + '.') : '';
+  }
+
   async function refreshDatasetSummary(){
     // Show current dataset from Sheet (Sheet is single source of truth)
     dataset = await LE.loadDataset();
@@ -110,8 +144,9 @@
     datasetList.innerHTML = '';
     dataset.forEach((item, idx) => {
       const li = document.createElement('li');
-    const defs = ((item.meanings && item.meanings.length) ? item.meanings : []).slice(0,2).join(' | ');
-      li.textContent = `${idx+1}. ${item.word} — ${defs}`;
+      const defs = ((item.meanings && item.meanings.length) ? item.meanings : []).slice(0,2).join(' | ');
+      const pos = getPosLabel(item);
+      li.textContent = `${idx+1}. ${item.word}${pos?(' ('+pos+')'):''} — ${defs}`;
       datasetList.appendChild(li);
     });
   }
@@ -138,6 +173,7 @@
   wordForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const word = wordInput.value.trim();
+    const posRaw = (posInput?.value || '').trim();
     const defs = Array.from(defsContainer.querySelectorAll('input'))
       .map(i => i.value.trim())
       .filter(Boolean);
@@ -147,8 +183,9 @@
     if (!word) { alert('Vui lòng nhập từ vựng'); return; }
     if (defs.length === 0) { alert('Vui lòng nhập ít nhất 1 mô tả'); return; }
 
-  // Store canonical fields: `meanings` + `examples`
+  // Store canonical fields: `meanings` + `examples` + optional `pos`
   const item = { word, meanings: defs, examples: exs };
+    if (posRaw) item.pos = posRaw;
 
     // Try append to Google Sheet (Sheet is single source of truth)
     (async () => {
@@ -166,6 +203,7 @@
       }
       // Reset inputs regardless
       wordInput.value = '';
+      if (posInput) posInput.value = '';
       defsContainer.innerHTML = '';
       ensureOneDef();
       if (examplesContainer) examplesContainer.innerHTML = '';
@@ -175,6 +213,7 @@
 
   btnReset.addEventListener('click', () => {
     wordInput.value = '';
+    if (posInput) posInput.value = '';
     defsContainer.innerHTML = '';
     ensureOneDef();
     if (examplesContainer) examplesContainer.innerHTML = '';
