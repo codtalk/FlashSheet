@@ -172,10 +172,11 @@ textarea.answer-input{min-height:96px; resize:vertical; line-height:1.4}
 .fc-image{margin:6px 0 8px}
 .fc-image img{max-width:100%; border-radius:12px; display:block}
 .fc-defs{margin:8px 0 0; padding-left:18px}
-.fc-defs li{margin:6px 0}
+.fc-defs li{margin:6px 0; position:relative; padding-right:42px}
 .fc-meaning{font-size:18px; margin:8px 0}
 .fc-explain{margin-top:8px}
 .fc-ex-list{margin:8px 0 0; padding-left:18px}
+.fc-ex-list li{margin:6px 0; position:relative; padding-right:42px}
 .fc-hint{margin-top:auto; font-size:12px; color:var(--muted)}
 .fc-actions{display:flex; gap:8px; align-items:center; margin:6px 0 2px}
 
@@ -199,6 +200,13 @@ textarea.answer-input{min-height:96px; resize:vertical; line-height:1.4}
 }
 .flip-card.fullscreen.is-flipped{ transform:translate(-50%, -50%) rotateY(180deg) }
 .modal-backdrop.fs-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.5); backdrop-filter:blur(2px); z-index:1099 }
+
+/* Inline translate button on hover */
+.trans-btn{position:absolute; right:8px; top:50%; transform:translateY(-50%); opacity:0; transition:opacity .12s ease; border:none; background:rgba(255,255,255,0.08); color:#e5e7eb; border-radius:999px; padding:4px 8px; font-size:12px; cursor:pointer}
+.trans-btn:hover{filter:brightness(1.1)}
+.fc-defs li:hover .trans-btn, .fc-ex-list li:hover .trans-btn{opacity:1}
+.inline-trans{margin-top:4px; font-size:13px; color:#cbd5e1}
+.inline-trans .muted{color:#94a3b8}
 
 /* Slider overlay buttons */
 .slide-btn{

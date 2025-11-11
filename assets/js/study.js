@@ -17,6 +17,7 @@
   const btnSlidePrev = document.getElementById('btnSlidePrev');
   const btnSlideNext = document.getElementById('btnSlideNext');
   const btnSelectForPractice = document.getElementById('btnSelectForPractice');
+  const transCache = new Map(); // cache inline translations per text
 
   let fsBackdrop = null;
 
@@ -157,7 +158,10 @@
     if (enDefs.length){
       // Replace cloze underscores with visible dashes for easier counting
       const conv = (window.LE && LE.clozeToDashes) ? LE.clozeToDashes : (s=>s);
-      fcDefs.innerHTML = enDefs.map(d => `<li>${conv(d)}</li>`).join('');
+      fcDefs.innerHTML = enDefs.map(d => {
+        const txt = conv(d);
+        return `<li><span class="line-text">${txt}</span><button class="trans-btn" title="Dịch" aria-label="Dịch dòng này">Dịch</button><div class="inline-trans" hidden></div></li>`;
+      }).join('');
     } else {
       fcDefs.innerHTML = `<li class="muted">(Không có định nghĩa tiếng Anh để hiển thị)</li>`;
     }
@@ -169,7 +173,7 @@
     if (examples.length){
       fcExplain.innerHTML = `
         <div class="translation-row"><span class="muted">Ví dụ:</span></div>
-        <ul class="fc-ex-list">${examples.map(e => `<li>${e}</li>`).join('')}</ul>`;
+        <ul class="fc-ex-list">${examples.map(e => `<li><span class="line-text">${e}</span><button class="trans-btn" title="Dịch" aria-label="Dịch câu này">Dịch</button><div class="inline-trans" hidden></div></li>`).join('')}</ul>`;
     } else {
       fcExplain.innerHTML = '';
     }
@@ -378,6 +382,40 @@
   btnSlideNext?.addEventListener('click', (e)=>{ e.stopPropagation(); move(1); });
   btnFullscreen?.addEventListener('click', enterFullscreen);
   document.addEventListener('keydown', onKey);
+
+  // Inline translate: event delegation on definitions and examples
+  async function handleTranslateClick(e){
+    const btn = e.target && e.target.closest && e.target.closest('.trans-btn');
+    if (!btn) return;
+    e.stopPropagation(); e.preventDefault();
+    const li = btn.closest('li'); if (!li) return;
+    const textEl = li.querySelector('.line-text');
+    const out = li.querySelector('.inline-trans');
+    const raw = (textEl && textEl.textContent) ? textEl.textContent.trim() : '';
+    if (!raw) return;
+    if (out){ out.hidden = false; out.innerHTML = '<span class="muted">Đang dịch…</span>'; }
+    try{
+      const key = raw.toLowerCase();
+      if (transCache.has(key)){
+        const vi = transCache.get(key) || '';
+        if (out) out.textContent = vi;
+        return;
+      }
+      if (window.LE && LE.translate){
+        const vi = await LE.translate(raw, 'en', 'vi');
+        const text = vi || '(Không dịch được)';
+        transCache.set(key, text);
+        if (out) out.textContent = text;
+      } else {
+        // Fallback: open Google Translate in new tab
+        const url = `https://translate.google.com/?sl=en&tl=vi&text=${encodeURIComponent(raw)}&op=translate`;
+        try{ window.open(url, '_blank', 'noopener'); }catch{}
+        if (out) out.innerHTML = `<a target="_blank" rel="noopener" href="${url}">Mở Google Dịch</a>`;
+      }
+    }catch(err){ if (out) out.textContent = '(Lỗi dịch)'; }
+  }
+  fcDefs?.addEventListener('click', handleTranslateClick);
+  fcExplain?.addEventListener('click', handleTranslateClick);
 
   // touch swipe
   flipCard?.addEventListener('touchstart', (e)=>{
