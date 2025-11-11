@@ -198,14 +198,18 @@
 
   function submitText(value, index){
     if (answered) return;
-    const ok = normalize(value) === normalize(dataset[index].word);
-    handleResult(ok, index);
+    let idx = (Number.isInteger(index) && dataset[index]) ? index : current;
+    if (idx == null || idx < 0 || !dataset[idx]) return;
+    const ok = normalize(value) === normalize(dataset[idx].word);
+    handleResult(ok, idx);
   }
 
   function submitChoice(choice, index, el){
     if (answered) return;
-    const ok = normalize(choice) === normalize(dataset[index].word);
-    handleResult(ok, index, el);
+    let idx = (Number.isInteger(index) && dataset[index]) ? index : current;
+    if (idx == null || idx < 0 || !dataset[idx]) return;
+    const ok = normalize(choice) === normalize(dataset[idx].word);
+    handleResult(ok, idx, el);
   }
 
   function handleResult(ok, index, choiceEl){
@@ -518,7 +522,10 @@
 
   btnShuffle.addEventListener('click', reshuffle);
   btnNext.addEventListener('click', nextQuestion);
-  modeSelect.addEventListener('change', () => setQuestion(queue[current] ?? 0));
+  modeSelect.addEventListener('change', () => {
+    const idx = (current != null && current >= 0 && dataset[current]) ? current : 0;
+    if (dataset && dataset.length) setQuestion(idx);
+  });
   // Removed: reload from file and import JSON/CSV on learn page
 
   function loadFeedbackBuffer(){
