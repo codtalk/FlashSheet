@@ -86,6 +86,7 @@
   }
 
   function setQuestion(index){
+    if (index == null || index < 0 || !dataset || index >= dataset.length) return;
     const item = dataset[index];
   const meanings = Array.isArray(item.meanings) ? item.meanings : [];
     const examples = Array.isArray(item.examples) ? item.examples : [];
@@ -198,7 +199,8 @@
 
   function submitText(value, index){
     if (answered) return;
-    let idx = (Number.isInteger(index) && dataset[index]) ? index : current;
+    const hasIdx = Number.isInteger(index) && index >= 0 && index < (dataset?.length || 0);
+    let idx = hasIdx ? index : current;
     if (idx == null || idx < 0 || !dataset[idx]) return;
     const ok = normalize(value) === normalize(dataset[idx].word);
     handleResult(ok, idx);
@@ -206,7 +208,8 @@
 
   function submitChoice(choice, index, el){
     if (answered) return;
-    let idx = (Number.isInteger(index) && dataset[index]) ? index : current;
+    const hasIdx = Number.isInteger(index) && index >= 0 && index < (dataset?.length || 0);
+    let idx = hasIdx ? index : current;
     if (idx == null || idx < 0 || !dataset[idx]) return;
     const ok = normalize(choice) === normalize(dataset[idx].word);
     handleResult(ok, idx, el);
@@ -689,13 +692,16 @@
       qIndex.textContent = '0/0';
       return;
     }
-    reshuffle();
+    // Filter out words already selected for study (practice) so they don't appear here
+    try{ dataset = dataset.filter(d => !itemIsSelected(d)); }catch(e){ console.warn('Filter selectedForStudy failed', e); }
     // Load SRS progress
-  try{ srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {}; }catch{ srsStore = {}; }
-  // Filter out words already selected for study (practice) so they don't appear here
-  try{ dataset = dataset.filter(d => !itemIsSelected(d)); }catch(e){ console.warn('Filter selectedForStudy failed', e); }
-  buildSRSQueue();
-  renderSRSCounts();
+    try{ srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {}; }catch{ srsStore = {}; }
+    // Build SRS queue before first question so SRS takes priority
+    buildSRSQueue();
+    // Now shuffle and present the first question
+    reshuffle();
+    // Render SRS counts after initial load
+    renderSRSCounts();
 
     // No auto-refresh from Sheet; use the reload button to refresh from file
     // attempt to flush any pending feedback if write URL is available
