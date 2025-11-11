@@ -95,6 +95,12 @@ textarea.answer-input{min-height:96px; resize:vertical; line-height:1.4}
 .stat .label{font-size:12px; color:var(--muted)}
 .stat .value{font-size:20px; font-weight:800}
 
+/* SRS summary cards */
+.srs-cards{display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 12px}
+.srs-card{background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:10px; font-size:13px; display:inline-flex; align-items:center; gap:8px}
+.srs-card .lvl{font-weight:700; color:var(--primary-2)}
+.srs-card .cnt{font-weight:800}
+
 /* Admin */
 .page-title{margin-top:8px}
 .data-form{background:var(--card); padding:18px; border-radius:16px; box-shadow:0 16px 40px var(--shadow)}

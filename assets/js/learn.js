@@ -734,25 +734,29 @@
 
   // --- SRS Due Counts (render per level) ---
   function renderSRSCounts(){
-    const el = document.getElementById('srsSummary');
-    if (!el) return;
-    if (!dataset || !dataset.length){ el.innerHTML = '<div class="label">Cần ôn: 0</div>'; return; }
+    const wrap = document.getElementById('srsCards');
+    if (!wrap) return;
+    if (!dataset || !dataset.length){ wrap.innerHTML = ''; return; }
     const now = Date.now();
-    const buckets = { 'L1':0,'L2':0,'L3':0,'L4':0,'L5+':0 };
+    const buckets = [
+      { key:'L1', label:'Mới', count:0 },
+      { key:'L2', label:'Ôn sớm', count:0 },
+      { key:'L3', label:'Đang nhớ', count:0 },
+      { key:'L4', label:'Vững', count:0 },
+      { key:'L5+', label:'Rất vững', count:0 }
+    ];
     dataset.forEach(item => {
       const reps = Number(item.reps)||0;
       const due = Number(item.due)||0;
-      // Count only items that are due (or new without due set)
       const isDue = !due || due <= now;
       if (!isDue) return;
-      if (reps <= 0) buckets.L1++;
-      else if (reps === 1) buckets.L2++;
-      else if (reps === 2) buckets.L3++;
-      else if (reps === 3) buckets.L4++;
-      else buckets['L5+']++;
+      if (reps <= 0) buckets[0].count++;
+      else if (reps === 1) buckets[1].count++;
+      else if (reps === 2) buckets[2].count++;
+      else if (reps === 3) buckets[3].count++;
+      else buckets[4].count++;
     });
-    const total = Object.values(buckets).reduce((a,b)=>a+b,0);
-    el.innerHTML = `<div class="label">Cần ôn (${total})</div><div class="srs-levels">${Object.entries(buckets).map(([k,v])=>`<span class='badge srs-badge' data-level='${k}'>${k}: ${v}</span>`).join(' ')}</div>`;
+    wrap.innerHTML = buckets.map(b => `<div class="srs-card" data-level="${b.key}"><span class="lvl">${b.key}</span><span class="cnt">${b.count}</span></div>`).join('');
   }
 
   // Re-render counts after scheduling updates

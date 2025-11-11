@@ -10,7 +10,6 @@
   const wordInput = document.getElementById('wordInput');
   const posInput = document.getElementById('posInput');
   const btnReset = document.getElementById('btnReset');
-  const btnSync = document.getElementById('btnSync');
   const datasetInfo = document.getElementById('datasetInfo');
   const datasetList = document.getElementById('datasetList');
   // Sheet sync elements
@@ -293,48 +292,7 @@
   }
 
   // Full sync: pull from sheet (merge to local) then push new local items to sheet (if write URL configured)
-  btnSync?.addEventListener('click', async () => {
-    // Pull from sheet
-    const sheetData = await getSheetDataset();
-    // Use current in-memory dataset (admin edits in this session) as local data to compute deltas
-    let localData = Array.isArray(dataset) ? dataset : [];
-
-    const sheetMap = toMap(sheetData);
-    const localMap = toMap(localData);
-    // Merge SRS fields from sheet into local SRS store (if present)
-    try{
-      const srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {};
-      (sheetData||[]).forEach(r => {
-        const w = (r.word||'').toString().trim().toLowerCase(); if (!w) return;
-        const card = srsStore[w] || srsStore[w.toLowerCase()] || {};
-        ['addedAt','reps','lapses','ease','interval','due','lastReview'].forEach(f => {
-          if (r[f] !== undefined && r[f] !== ''){
-            const val = r[f];
-            card[f] = (f === 'reps' || f === 'lapses' || f === 'interval') ? parseInt(val,10) || 0 : (isNaN(Number(val)) ? val : Number(val));
-          }
-        });
-        if (!card.addedAt) card.addedAt = Date.now();
-        srsStore[w] = card;
-      });
-      if (window.SRS && SRS.saveStore) SRS.saveStore(srsStore);
-    }catch(e){ console.warn('Merge SRS from sheet failed', e); }
-    // merge both ways into local
-    for (const [w, defs] of sheetMap.entries()){
-      if (!localMap.has(w)) localMap.set(w, new Set(defs));
-      else { const s = localMap.get(w); defs.forEach(d => s.add(d)); }
-    }
-  const merged = fromMap(localMap);
-  dataset = merged;
-  await refreshDatasetSummary();
-  showToast(`Tải từ Sheet: +${sheetData.length} (hợp nhất)`, 'success');
-    // Push deltas up (local minus sheet) if write URL configured
-    const writeUrl = (sheetCfg && sheetCfg.writeUrl) || (sheetWriteUrlEl?.value?.trim());
-    if (writeUrl) {
-      await pushDeltasToSheet(localMap, sheetMap);
-    } else {
-      showToast('Chưa cấu hình Write URL — đã tải dữ liệu từ Sheet (không đẩy lên Sheet)', 'error');
-    }
-  });
+  // Sync button removed: local ↔ sheet bidirectional sync is deprecated.
 
   // Removed feature: vocab.json -> Sheet one-way sync
 
