@@ -87,6 +87,7 @@
 
   function setQuestion(index){
     if (index == null || index < 0 || !dataset || index >= dataset.length) return;
+    current = index;
     const item = dataset[index];
   const meanings = Array.isArray(item.meanings) ? item.meanings : [];
     const examples = Array.isArray(item.examples) ? item.examples : [];
@@ -199,8 +200,10 @@
 
   function submitText(value, index){
     if (answered) return;
-    const hasIdx = Number.isInteger(index) && index >= 0 && index < (dataset?.length || 0);
-    let idx = hasIdx ? index : current;
+    // Always trust the current active index set by setQuestion
+    let idx = (current != null && current >= 0) ? current : undefined;
+    // Fallback to provided index if current is not set (defensive)
+    if ((idx == null || idx < 0) && Number.isInteger(index) && index >= 0 && index < (dataset?.length || 0)) idx = index;
     if (idx == null || idx < 0 || !dataset[idx]) return;
     const ok = normalize(value) === normalize(dataset[idx].word);
     handleResult(ok, idx);
@@ -208,8 +211,10 @@
 
   function submitChoice(choice, index, el){
     if (answered) return;
-    const hasIdx = Number.isInteger(index) && index >= 0 && index < (dataset?.length || 0);
-    let idx = hasIdx ? index : current;
+    // Always trust the current active index set by setQuestion
+    let idx = (current != null && current >= 0) ? current : undefined;
+    // Fallback to provided index if current is not set (defensive)
+    if ((idx == null || idx < 0) && Number.isInteger(index) && index >= 0 && index < (dataset?.length || 0)) idx = index;
     if (idx == null || idx < 0 || !dataset[idx]) return;
     const ok = normalize(choice) === normalize(dataset[idx].word);
     handleResult(ok, idx, el);
