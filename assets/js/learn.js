@@ -529,7 +529,12 @@
   }
 
   btnShuffle.addEventListener('click', reshuffle);
-  btnNext.addEventListener('click', nextQuestion);
+  btnNext.addEventListener('click', () => {
+    // If using SRS queue, advance it properly to avoid repeating the same word
+    if (srsQueue && srsQueue.length) return advanceSRSQueue();
+    // Fallback to weight-based next
+    return nextQuestion();
+  });
   modeSelect.addEventListener('change', () => {
     const idx = (current != null && current >= 0 && dataset[current]) ? current : 0;
     if (dataset && dataset.length) setQuestion(idx);
@@ -593,8 +598,7 @@
 
   async function init(){
     loadProgress();
-    // Ensure we have a username before loading dataset
-    try{ ensureUserPrompt('thienpahm'); }catch{}
+    // Do not prompt for username here to avoid blocking page load on some browsers
     // Load toggles from localStorage
     try{
       const tts = localStorage.getItem(AUTO_TTS_KEY); if (toggleTTS && tts !== null) toggleTTS.checked = tts === '1';
@@ -687,18 +691,30 @@
         try{ localStorage.setItem(FEEDBACK_USER_KEY, (feedbackUser.value||'').trim()); }catch{}
       });
     }catch{}
+    // Helper: timeout wrapper so we don't hang forever on network issues
+    const withTimeout = (p, ms=7000) => new Promise((resolve, reject)=>{
+      let done = false;
+      const t = setTimeout(()=>{ if (!done){ done=true; reject(new Error('timeout')); } }, ms);
+      p.then(v=>{ if (!done){ done=true; clearTimeout(t); resolve(v); }}).catch(e=>{ if (!done){ done=true; clearTimeout(t); reject(e); }});
+    });
     // Load dataset from Google Sheet (Sheet is the single source of truth)
     try{
-      dataset = await LE.loadDataset();
-    }catch(err){ dataset = []; console.warn('LE.loadDataset failed', err); }
+      try{
+        dataset = await withTimeout(LE.loadDataset(), 7000);
+      }catch(err1){
+        console.warn('LE.loadDataset timed out/failed, falling back to default sheet', err1);
+        dataset = await withTimeout(LE.loadDefaultDataset(), 7000).catch(()=>[]);
+      }
+    }catch(err){ dataset = []; console.warn('Dataset load failed', err); }
     if (!Array.isArray(dataset)) dataset = [];
     if (dataset.length === 0) {
-      questionText.textContent = 'Chưa có dữ liệu từ Sheet. Vui lòng cấu hình Google Sheet trong trang Nhập dữ liệu.';
+      // Better message if all words were filtered or nothing loaded
+      questionText.textContent = 'Không tải được dữ liệu. Vào trang “Nhập dữ liệu” để cấu hình Google Sheet hoặc kiểm tra mạng.';
       qIndex.textContent = '0/0';
       return;
     }
-    // Filter out words already selected for study (practice) so they don't appear here
-    try{ dataset = dataset.filter(d => !itemIsSelected(d)); }catch(e){ console.warn('Filter selectedForStudy failed', e); }
+    // Do NOT filter out selected items here. Learn/Practice should focus on selected items if any,
+    // but still keep the full dataset to allow SRS and stats to work.
     // Load SRS progress
     try{ srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {}; }catch{ srsStore = {}; }
     // Build SRS queue before first question so SRS takes priority
@@ -755,6 +771,8 @@
     const wrap = document.getElementById('srsCards');
     if (!wrap) return;
     if (!dataset || !dataset.length){ wrap.innerHTML = ''; return; }
+    const hasSelection = dataset.some(itemIsSelected);
+    const source = hasSelection ? dataset.filter(itemIsSelected) : dataset;
     const now = Date.now();
     const buckets = [
       { key:'L1', label:'Mới', count:0 },
@@ -763,7 +781,7 @@
       { key:'L4', label:'Vững', count:0 },
       { key:'L5+', label:'Rất vững', count:0 }
     ];
-    dataset.forEach(item => {
+    source.forEach(item => {
       const reps = Number(item.reps)||0;
       const due = Number(item.due)||0;
       const isDue = !due || due <= now;
