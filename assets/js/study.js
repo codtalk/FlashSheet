@@ -22,6 +22,7 @@
   let fsBackdrop = null;
 
   let dataset = [];
+  let srsSet = new Set(); // words already selected by current user (from srs_user)
   let order = [];
   let cur = 0;
   let touchStartX = null;
@@ -252,18 +253,21 @@
   }
 
   async function init(){
-    // Ensure username exists and then load dataset from Google Sheet (per-user)
-    try{ ensureUserPrompt('thienpahm'); }catch{}
-    try{
-      // Load the shared/default sheet for the study (public) view
-      dataset = await LE.loadDefaultDataset();
-    }catch(err){ dataset = []; console.warn('LE.loadDefaultDataset failed', err); }
+    // Ensure username exists
+    try{ ensureUserPrompt(''); }catch{}
+    // Load shared dataset
+    try{ dataset = await LE.loadDefaultDataset(); }
+    catch(err){ dataset = []; console.warn('LE.loadDefaultDataset failed', err); }
     if (!Array.isArray(dataset)) dataset = [];
-    // Hide items previously marked for study across devices (via shared sheet flag)
-    try{ dataset = dataset.filter(d => !itemIsSelected(d)); }catch(e){ console.warn('Filter selectedForStudy in study failed', e); }
+    // Load user's SRS and exclude words already present
+    try{
+      const srs = await LE.loadDataset();
+      srsSet = new Set((Array.isArray(srs)?srs:[]).map(r => String((r && r.word) || '').toLowerCase()).filter(Boolean));
+      dataset = dataset.filter(d => !srsSet.has(String(d.word||'').toLowerCase()));
+    }catch(e){ console.warn('Exclude words by srs_user failed', e); }
     if (dataset.length === 0){
-      // No data available from Sheet — show helpful message
-      fcWord.textContent = 'Chưa có dữ liệu từ Sheet. Vui lòng cấu hình Google Sheet trong trang Nhập dữ liệu.';
+      // No data available — show helpful message
+      fcWord.textContent = 'Chưa có dữ liệu. Vui lòng thêm dữ liệu trong trang Nhập dữ liệu (admin.html).';
       fcDefs.innerHTML = '';
       fcMeaning.textContent = '';
       fcExplain.textContent = '';
@@ -291,31 +295,20 @@
   }
 
   // Helper: determine if an item is marked selected for practice
+  // No longer rely on selected flags in shared table; selection is per-user in srs_user
   function itemIsSelected(item){
-    if (!item) return false;
-    try{
-      if (item.selectedForStudy === '1' || item.selectedForStudy === 1 || item.selectedForStudy === true) return true;
-      if (item.selected === '1' || item.selected === 1 || item.selected === true) return true;
-      // also check any property containing "select"
-      for (const k in item){
-        if (!k) continue;
-        if (k.toLowerCase().includes('select')){
-          const v = item[k]; if (v === '1' || v === 1 || String(v).toLowerCase() === 'true') return true;
-        }
-      }
-    }catch(e){}
-    return false;
+    try{ return !!(item && srsSet.has(String(item.word||'').toLowerCase())); }catch{ return false; }
   }
 
-  // Select current word for practice: mark locally, push to Sheet (best-effort), and navigate to practice tab
+  // Select current word for practice: mark locally and persist to srs_user (Supabase)
   btnSelectForPractice?.addEventListener('click', async (e) => {
     e.stopPropagation();
     if (!dataset || dataset.length === 0) { showToast('Không có từ để chọn', 'error'); return; }
     const item = dataset[cur];
     if (!item || !item.word) { showToast('Không có từ để chọn', 'error'); return; }
     if (itemIsSelected(item)) { showToast('Từ đã được chọn', 'success'); return; }
-  // Mark in-memory and persist to Sheet (Sheet is source of truth)
-  item.selectedForStudy = '1';
+    // Mark in-memory set for button state
+    try{ srsSet.add(String(item.word).toLowerCase()); }catch{}
     showToast('Đã chọn từ để học. Đang chuyển…', 'success');
     // Immediately hide this card from Study tab and move to next
     try{
@@ -336,22 +329,18 @@
         updateIndex();
       }
     }catch(remErr){ console.warn('Remove & advance failed', remErr); }
-    // Best-effort push to configured Apps Script write URL
+    // Best-effort push selection to backend (Supabase srs_user)
     try{
-      const cfg = (LE.loadSheetConfig && LE.loadSheetConfig()) || {};
-      let endpoint = cfg.writeUrl || '';
-      if (endpoint){
-        // include SRS fields if available
-        const srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {};
-    const srs = srsStore[(item.word||'').toLowerCase()] || {};
-  const row = Object.assign({ word: item.word, meanings: (item.meanings || []), examples: (item.examples || []), selectedForStudy: '1' }, srs);
-        // Force write to DEFAULT sheet (shared) by appending empty user param so utils won't add user=name
-        if (endpoint && endpoint.indexOf('script.google.com') >= 0){
-          if (endpoint.indexOf('user=') === -1) endpoint = endpoint + (endpoint.indexOf('?')>=0 ? '&' : '?') + 'user=';
-        }
-        await LE.appendRowsToSheet(endpoint, [row]);
-      }
-    }catch(err){ console.warn('Persist selection to Sheet failed', err); }
+      const appCfg = (window.APP_CONFIG || {});
+      const useSupabase = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL;
+      // include SRS fields if available
+      const srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {};
+  const srs = srsStore[(item.word||'').toLowerCase()] || {};
+  // Use flat-case to align with your srs_user schema (addedat)
+  if (!srs.addedat && !srs.added_at && !srs.addedAt) srs.addedat = Date.now();
+  const row = Object.assign({ word: item.word, meanings: (item.meanings || []), examples: (item.examples || []) }, srs);
+      if (useSupabase){ await LE.appendRowsToSheet('', [row]); }
+    }catch(err){ console.warn('Persist selection failed', err); }
   // Previously we auto-redirected the user to the practice tab here.
   // Keep the user on the Study page after selecting a word for practice so they can continue browsing.
   // If you want to navigate programmatically, you can uncomment the line below.
@@ -395,7 +384,7 @@
         try{ ok2 = await (LE.tts.speakViaAudio && LE.tts.speakViaAudio(word, { lang: 'en' })); }catch{}
         console.debug(logPrefix, 'fallback audio result =', ok2);
         if (!ok2){
-          showToast('Không phát được âm. Hãy mở bằng Chrome/Safari và/hoặc cấu hình Apps Script TTS URL trong Nhập dữ liệu.', 'error');
+          showToast('Không phát được âm. Hãy mở bằng Chrome/Safari và thử lại sau vài giây.', 'error');
         }
       }
     }catch(err){

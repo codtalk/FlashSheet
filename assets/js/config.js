@@ -1,12 +1,19 @@
 // config.js — centralized config for external endpoints and defaults
 // Keep non-sensitive public URLs here (Apps Script exec URLs, CSV publish URLs, translate service)
 window.APP_CONFIG = window.APP_CONFIG || {
-  // Feedback / write endpoint (Apps Script exec)
-  FEEDBACK_URL: 'https://script.google.com/macros/s/AKfycbzX08o-y5trCA7-lCw-rLRL369Ctte2kCv_2XqA5htT3f0O5cKWgOFs1J7apbLM6eoNHw/exec',
-  // Default public CSV and write exec (ThienPahm preset)
-  DEFAULT_CSV: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuYF-fncf9PSBfkDPMAv_q4LiYColRiVIpUniAUKuQFLPXqXhMgkYsTmoDr-BCv5aqaqNRAnYx7_TC/pub?output=csv',
-  DEFAULT_WRITE: 'https://script.google.com/macros/s/AKfycbwO7sVK4kTsPdDWpWGL_1UcJ11N0RYg1BXYnzpSYIXoe_Gwxfmi5YQTuHZ0WQi8lnm8Gg/exec',
-  DEFAULT_TRANSLATE: 'https://script.google.com/macros/s/AKfycbwDFUlYoI4ody5Iy0qm1lP6WhkjFj15NnaFaEiNkx9p8ZAT7T67Y-ORJ-vonntOno2wFA/exec'
+  // Feedback endpoint: leave empty to use Supabase table `feedback`
+  FEEDBACK_URL: '',
+  // Legacy Google Sheets fields removed; the app runs in Supabase-only mode.
+  // Data source: 'supabase' only
+  DATA_SOURCE: 'supabase',
+  // Optional Supabase config (fill to enable). Never commit secrets if this repo is public.
+  SUPABASE_URL: 'https://cctwmafkizlqknyezxvd.supabase.co', // e.g. 'https://cctwmafkizlqknyezxvd.supabase.co'
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjdHdtYWZraXpscWtueWV6eHZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NTgyODUsImV4cCI6MjA3ODUzNDI4NX0.fvgE7BiJPym6nUk9uwhxZ6qgYGYnjkgWUeWcu5Jgf7o', // from Project Settings > API > anon public
+  SUPABASE_SCHEMA: 'public',
+  SUPABASE_WORDS_TABLE: 'words_shared',
+  SUPABASE_SRS_TABLE: 'srs_user',
+  SUPABASE_FEEDBACK_TABLE: 'feedback',
+  SUPABASE_USERS_TABLE: 'users'
 };
 
 // Helper getter for backwards compatibility

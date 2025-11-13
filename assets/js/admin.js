@@ -12,32 +12,19 @@
   const btnReset = document.getElementById('btnReset');
   const datasetInfo = document.getElementById('datasetInfo');
   const datasetList = document.getElementById('datasetList');
-  // Sheet sync elements
-  // Sheet sync elements
-  const sheetCsvUrlEl = document.getElementById('sheetCsvUrl');
-  const sheetWriteUrlEl = document.getElementById('sheetWriteUrl');
-  const sheetAutoOnLearnEl = document.getElementById('sheetAutoOnLearn');
-  const sheetRefreshSecEl = document.getElementById('sheetRefreshSec');
-  const sheetTranslateUrlEl = document.getElementById('sheetTranslateUrl');
-  const sheetTtsUrlEl = document.getElementById('sheetTtsUrl');
-  const btnSheetLoad = document.getElementById('btnSheetLoad');
-  const btnSheetSaveCfg = document.getElementById('btnSheetSaveCfg');
-  const btnUseThienPreset = document.getElementById('btnUseThienPreset');
+  // (Sheets removed)
+  // Supabase tools
+  const btnSupabaseCheck = document.getElementById('btnSupabaseCheck');
+  // removed: btnSupabaseImport (Sheet import deprecated)
+  const supabaseStatus = document.getElementById('supabaseStatus');
+  const pasteDataEl = document.getElementById('pasteData');
+  const btnSupabasePasteImport = document.getElementById('btnSupabasePasteImport');
   // SRS config elements
   const dailyNewLimitEl = document.getElementById('dailyNewLimit');
   const dailyReviewLimitEl = document.getElementById('dailyReviewLimit');
   const btnSaveSrsCfg = document.getElementById('btnSaveSrsCfg');
 
   let dataset = [];
-  let sheetCfg = LE.loadSheetConfig() || {};
-  // Ensure user is set before any sheet operations
-  const CURRENT_USER = ensureUserPrompt('thienpahm') || '';
-  if (CURRENT_USER) {
-    // prefill sheet config defaults for ThienPahm if none
-    sheetCfg = sheetCfg || {};
-    if (!sheetCfg.writeUrl) sheetCfg.writeUrl = APP_CFG.DEFAULT_WRITE || 'https://script.google.com/macros/s/AKfycbzX08o-y5trCA7-lCw-rLRL369Ctte2kCv_2XqA5htT3f0O5cKWgOFs1J7apbLM6eoNHw/exec';
-    if (!sheetCfg.csvUrl) sheetCfg.csvUrl = APP_CFG.DEFAULT_CSV || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuYF-fncf9PSBfkDPMAv_q4LiYColRiVIpUniAUKuQFLPXqXhMgkYsTmoDr-BCv5aqaqNRAnYx7_TC/pub?output=csv';
-  }
 
   function showToast(msg, type){
     const t = document.createElement('div');
@@ -135,8 +122,9 @@
   }
 
   async function refreshDatasetSummary(){
-    // Show current dataset from Sheet (Sheet is single source of truth)
-    dataset = await LE.loadDataset();
+    // Show current dataset from active source
+    // Supabase-only: list words from shared table
+    dataset = await LE.loadDefaultDataset();
     datasetInfo.textContent = `${dataset.length} từ vựng`;
     const datasetCount = document.getElementById('datasetCount');
     if (datasetCount) datasetCount.textContent = `— ${dataset.length} từ`;
@@ -150,14 +138,65 @@
     });
   }
 
-  function loadSheetForm(){
-    if (sheetCsvUrlEl) sheetCsvUrlEl.value = sheetCfg.csvUrl || '';
-    if (sheetWriteUrlEl) sheetWriteUrlEl.value = sheetCfg.writeUrl || '';
-    if (sheetTranslateUrlEl) sheetTranslateUrlEl.value = sheetCfg.translateUrl || '';
-    if (sheetTtsUrlEl) sheetTtsUrlEl.value = sheetCfg.ttsUrl || '';
-    if (sheetAutoOnLearnEl) sheetAutoOnLearnEl.checked = !!sheetCfg.autoOnLearn;
-    if (sheetRefreshSecEl) sheetRefreshSecEl.value = sheetCfg.refreshSec || 120;
-    loadSrsConfig();
+  // (Sheets removed) loadSrsConfig still used.
+
+  function setSupabaseStatus(msg, kind='info'){
+    if (!supabaseStatus) return;
+    supabaseStatus.textContent = msg || '';
+    supabaseStatus.className = 'hint ' + (kind || '');
+  }
+
+  function buildSbHeaders(){
+    return {
+      'apikey': APP_CFG.SUPABASE_ANON_KEY || '',
+      'Authorization': `Bearer ${APP_CFG.SUPABASE_ANON_KEY || ''}`,
+      'Accept': 'application/json'
+    };
+  }
+
+  async function supabasePing(){
+    const useSupabase = (APP_CFG && APP_CFG.DATA_SOURCE === 'supabase' && APP_CFG.SUPABASE_URL);
+    if (!useSupabase){ setSupabaseStatus('Chưa bật chế độ Database (Supabase).', 'warn'); return { ok:false }; }
+    const table = APP_CFG.SUPABASE_WORDS_TABLE || 'words_shared';
+    const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${table}?select=word&limit=1`;
+    try{
+      const resp = await fetch(url, { headers: buildSbHeaders(), cache: 'no-store' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const arr = await resp.json().catch(()=>[]);
+      console.log('[Supabase] Connected. Sample:', arr);
+      setSupabaseStatus('Supabase: Connected', 'success');
+      return { ok:true, sample: arr };
+    }catch(err){
+      console.warn('[Supabase] Connection failed:', err);
+      setSupabaseStatus('Supabase: Không kết nối được', 'error');
+      return { ok:false, error: err };
+    }
+  }
+
+  // (Sheets removed) Import from CSV via pasted text is still supported below.
+
+  function parsePastedRows(text){
+    const lines = (text || '').split(/\r?\n/).map(l=>l.trim());
+    const out = [];
+    for (const line of lines){
+      if (!line) continue;
+      // Skip stray separators
+      if (/^;+$/g.test(line)) continue;
+      let cols = line.split('\t');
+      if (cols.length < 2) {
+        // fallback: split on multiple spaces or commas
+        cols = line.split(/\s{2,}|,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+      }
+      if (cols.length < 2) continue;
+      const word = String(cols[1]||'').trim();
+      if (!word) continue;
+      const meaningsRaw = String(cols[3]||'').trim();
+      const examplesRaw = String(cols[4]||'').trim();
+      const meanings = meaningsRaw ? meaningsRaw.split(';').map(s=>s.replace(/\|/g,'').trim()).filter(Boolean) : [];
+      const examples = examplesRaw ? examplesRaw.split(';').map(s=>s.trim()).filter(Boolean) : [];
+      out.push({ word, meanings, examples });
+    }
+    return out;
   }
 
   btnAddDef.addEventListener('click', () => {
@@ -186,19 +225,16 @@
   const item = { word, meanings: defs, examples: exs };
     if (posRaw) item.pos = posRaw;
 
-    // Try append to Google Sheet (Sheet is single source of truth)
+    // Persist to database (Supabase)
     (async () => {
       try{
         await tryAppendToSheet(item);
-        // After successful append, reload dataset from Sheet and refresh UI
-        const sheetData = await getSheetDataset();
-        dataset = sheetData || [];
-        // refresh list
+        // Refresh list from Supabase
         await refreshDatasetSummary();
-        showToast('Đã lưu từ lên Sheet và cập nhật danh sách', 'success');
+        showToast('Đã lưu lên Database và cập nhật danh sách', 'success');
       }catch(err){
-        console.warn('Append to Sheet failed:', err);
-        showToast('Không lưu được lên Sheet. Kiểm tra cấu hình Write URL', 'error');
+        console.warn('Append failed:', err);
+        showToast('Không lưu được lên Database.', 'error');
       }
       // Reset inputs regardless
       wordInput.value = '';
@@ -249,47 +285,7 @@
     return out;
   }
 
-  // Fetch sheet dataset safely
-  async function getSheetDataset(){
-    const csvUrl = (sheetCfg && sheetCfg.csvUrl) || (sheetCsvUrlEl?.value?.trim());
-    if (!csvUrl) return [];
-    try{
-      return await LE.fetchSheetCSV(csvUrl);
-    }catch(err){
-      console.warn('Fetch Sheet failed:', err);
-      return [];
-    }
-  }
-
-  // Append deltas to Sheet (no deletion)
-  async function pushDeltasToSheet(localMap, sheetMap){
-    const writeUrl = (sheetCfg && sheetCfg.writeUrl) || (sheetWriteUrlEl?.value?.trim());
-    if (!writeUrl) return; // no write configured
-    const rows = [];
-    const srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {};
-    for (const [word, defs] of localMap.entries()){
-      const sdefs = sheetMap.get(word) || new Set();
-      const newDefs = Array.from(defs).filter(d => !sdefs.has(d));
-      if (newDefs.length){
-        const srs = srsStore[word] || srsStore[word.toLowerCase()] || {};
-        rows.push(Object.assign({ word, meanings: newDefs }, srs));
-      }
-    }
-    if (rows.length){
-      try{
-        // Force push to DEFAULT sheet (avoid writing into user's personal sheet)
-        let endpoint = writeUrl;
-        if (endpoint && endpoint.indexOf('script.google.com') >= 0){
-          if (endpoint.indexOf('user=') === -1) endpoint = endpoint + (endpoint.indexOf('?')>=0 ? '&' : '?') + 'user=';
-        }
-        await LE.appendRowsToSheet(endpoint, rows);
-        showToast(`Đồng bộ lên Sheet: +${rows.length} mục`, 'success');
-      }catch(err){
-        console.warn('Push to Sheet failed:', err);
-        showToast('Đồng bộ lên Sheet thất bại', 'error');
-      }
-    }
-  }
+  // (Sheets removed) getSheetDataset/pushDeltasToSheet deleted.
 
   // Full sync: pull from sheet (merge to local) then push new local items to sheet (if write URL configured)
   // Sync button removed: local ↔ sheet bidirectional sync is deprecated.
@@ -299,47 +295,21 @@
   // init
   ensureOneDef();
   ensureOneExample();
-  loadSheetForm();
+  loadSrsConfig();
   // If no sheet configured, populate Local Storage from vocab.json once
   (async function bootstrapLocalFromFileIfNeeded(){
     // No local bootstrap from vocab.json: app uses Sheet as source of truth.
     try{
       await refreshDatasetSummary();
     }catch(e){ console.warn('refreshDatasetSummary failed', e); }
+    // First-load: check connectivity to Supabase
+    try{
+      const useSupabase = (APP_CFG && APP_CFG.DATA_SOURCE === 'supabase' && APP_CFG.SUPABASE_URL);
+      if (useSupabase){ await supabasePing(); }
+    }catch(e){ console.warn('Supabase bootstrap failed', e); }
   })();
 
-  // Sheet handlers
-  btnUseThienPreset?.addEventListener('click', async () => {
-    const csv = APP_CFG.DEFAULT_CSV || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuYF-fncf9PSBfkDPMAv_q4LiYColRiVIpUniAUKuQFLPXqXhMgkYsTmoDr-BCv5aqaqNRAnYx7_TC/pub?output=csv';
-  const write = APP_CFG.DEFAULT_WRITE || 'https://script.google.com/macros/s/AKfycbzX08o-y5trCA7-lCw-rLRL369Ctte2kCv_2XqA5htT3f0O5cKWgOFs1J7apbLM6eoNHw/exec';
-    if (sheetCsvUrlEl) sheetCsvUrlEl.value = csv;
-    if (sheetWriteUrlEl) sheetWriteUrlEl.value = write;
-    sheetCfg = {
-      csvUrl: csv,
-      writeUrl: write,
-      autoOnLearn: !!sheetAutoOnLearnEl?.checked,
-      refreshSec: Math.max(15, parseInt(sheetRefreshSecEl?.value, 10) || 120),
-    };
-    LE.saveSheetConfig(sheetCfg);
-    showToast('Đã chọn bộ từ và lưu cấu hình Sheet', 'success');
-    // Load dataset from the selected sheet and refresh UI
-    try{
-      await btnSheetLoad?.click();
-    }catch(err){ console.warn('Preset load via btnSheetLoad failed', err); }
-  });
-
-  btnSheetSaveCfg?.addEventListener('click', () => {
-    sheetCfg = {
-      csvUrl: sheetCsvUrlEl.value.trim(),
-      writeUrl: sheetWriteUrlEl.value.trim(),
-      translateUrl: sheetTranslateUrlEl.value.trim(),
-      ttsUrl: sheetTtsUrlEl.value.trim(),
-      autoOnLearn: !!sheetAutoOnLearnEl.checked,
-      refreshSec: Math.max(15, parseInt(sheetRefreshSecEl.value, 10) || 120),
-    };
-    LE.saveSheetConfig(sheetCfg);
-    alert('Đã lưu cấu hình Google Sheet');
-  });
+  // Sheet handlers removed
 
   function loadSrsConfig(){
     try{
@@ -359,51 +329,47 @@
     }catch(e){ alert('Không thể lưu SRS: ' + (e.message||e)); }
   });
 
-  btnSheetLoad?.addEventListener('click', async () => {
+  // (Sheets removed) btnSheetLoad deleted.
+
+  // Supabase tools handlers
+  btnSupabaseCheck?.addEventListener('click', async ()=>{ await supabasePing(); });
+  btnSupabasePasteImport?.addEventListener('click', async ()=>{
     try{
-      const csvUrl = sheetCsvUrlEl.value.trim();
-      if (!csvUrl) { alert('Nhập CSV URL trước'); return; }
-  const data = await LE.fetchSheetCSV(csvUrl);
-  dataset = data || [];
-  await refreshDatasetSummary();
-      alert('Đã tải dữ liệu từ Google Sheet');
-    }catch(err){
-      alert(err.message || 'Không thể tải từ Sheet');
+      const useSupabase = (APP_CFG && APP_CFG.DATA_SOURCE === 'supabase' && APP_CFG.SUPABASE_URL);
+      if (!useSupabase){ alert('Chưa bật chế độ Database (Supabase)'); return; }
+      const raw = pasteDataEl?.value || '';
+      if (!raw.trim()){ alert('Vui lòng dán dữ liệu vào ô trước'); return; }
+      const rows = parsePastedRows(raw);
+      if (!rows.length){ alert('Không phân tích được dòng nào hợp lệ'); return; }
+      if (!confirm(`Nhập ${rows.length} mục lên Supabase?`)) return;
+      const chunks = 200; let done=0, failed=0;
+      for (let i=0;i<rows.length;i+=chunks){
+        const batch = rows.slice(i,i+chunks);
+        setSupabaseStatus(`Đang nhập từ văn bản… ${Math.min(i+chunks, rows.length)}/${rows.length}`);
+        // eslint-disable-next-line no-await-in-loop
+        try{ await LE.appendRowsToSheet('', batch); done += batch.length; }
+        catch(e){ console.warn('Batch upsert failed', e); failed += batch.length; }
+      }
+      setSupabaseStatus(`Nhập xong: ${done} mục${failed?`, lỗi ${failed}`:''}.`, failed? 'warn' : 'success');
+      await refreshDatasetSummary();
+    }catch(e){
+      console.warn('Paste import failed', e);
+      setSupabaseStatus('Nhập từ văn bản thất bại', 'error');
     }
   });
 
-  // Auto-append to Sheet on local add
+  // Append to database on local add
   async function tryAppendToSheet(newItem){
-    const writeUrl = (sheetCfg && sheetCfg.writeUrl) || (sheetWriteUrlEl?.value?.trim());
-    if (!writeUrl) return; // not configured
     try{
-      // Force write to default sheet (do not attach user param)
-      let endpoint = writeUrl;
-      if (endpoint && endpoint.indexOf('script.google.com') >= 0){
-        if (endpoint.indexOf('user=') === -1) endpoint = endpoint + (endpoint.indexOf('?')>=0 ? '&' : '?') + 'user=';
-      }
-      const res = await LE.appendRowsToSheet(endpoint, [newItem]);
-      if (res && res.mode === 'no-cors') {
-        showToast('Đã gửi lên Sheet (no-cors)', 'success');
-      } else {
-        showToast('Đã gửi lên Sheet', 'success');
-      }
+      await LE.appendRowsToSheet('', [newItem]);
+      showToast('Đã lưu lên Database (Supabase)', 'success');
     } catch(err){
-      console.warn('Append to Sheet failed:', err);
-      showToast('Gửi lên Sheet thất bại', 'error');
+      console.warn('Append failed:', err);
+      showToast('Gửi dữ liệu thất bại', 'error');
     }
   }
 
-  // If navigated with #sheet-config, scroll to that section and focus first input
-  window.addEventListener('load', () => {
-    if (location.hash === '#sheet-config') {
-      const section = document.getElementById('sheet-config');
-      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setTimeout(() => {
-        document.getElementById('sheetCsvUrl')?.focus();
-      }, 300);
-    }
-  });
+  // (Sheets removed) hash navigation not needed.
 
   // Excel import/export removed: using Google Sheet (Apps Script) as single source of truth
 })();

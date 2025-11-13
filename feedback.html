@@ -31,64 +31,41 @@
   </header>
 
   <main class="container">
-    <h1>Danh sách góp ý</h1>
-    <div class="io-panel">
-      <div class="toolbar">
-        <button id="btnLoadFb" class="btn">Làm mới danh sách</button>
-      </div>
-      <p class="hint">Danh sách góp ý từ hệ thống trung tâm (đã cố định). Trang chỉ-đọc, không cần nhập link.</p>
-      <div style="overflow:auto">
-        <table class="table" id="fbTable">
-          <thead>
-            <tr><th>Thời gian</th><th>Người gửi</th><th>Nội dung</th><th>Ngữ cảnh</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-  </main>
-
-  <footer class="app-footer">
-    <span>Xem góp ý mới nhất bằng cách bấm "Tải góp ý".</span>
-  </footer>
-
+  <script src="assets/js/config.js"></script>
   <script>
-    const DEFAULT_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuYF-fncf9PSBfkDPMAv_q4LiYColRiVIpUniAUKuQFLPXqXhMgkYsTmoDr-BCv5aqaqNRAnYx7_TC/pub?gid=1791101310&single=true&output=csv';
-
-    async function fetchCSV(url){
-      const res = await fetch(url, { cache:'no-store' });
-      if (!res.ok) throw new Error('Không tải được CSV góp ý');
-      return await res.text();
-    }
-    function parseRows(csv){
-      const lines = csv.split(/\r?\n/);
-      if (!lines.length) return [];
-      const rows = [];
-      // simple RFC4180-like parsing for quotes
-      function splitCSVLine(line){
-        const out=[]; let cur=''; let inQ=false; for(let i=0;i<line.length;i++){ const ch=line[i];
-          if (ch==='"'){
-            if (inQ && line[i+1]==='"'){ cur+='"'; i++; }
-            else { inQ=!inQ; }
-          } else if (ch===',' && !inQ){ out.push(cur); cur=''; }
-          else { cur+=ch; }
-        }
-        out.push(cur); return out;
-      }
-      // skip header
-      for (let i=1;i<lines.length;i++){
-        const line = lines[i]; if (!line) continue;
-        rows.push(splitCSVLine(line));
-      }
-      return rows;
-    }
     const btn = document.getElementById('btnLoadFb');
     const tbody = document.querySelector('#fbTable tbody');
+
+    function fmtTs(iso){
+      try{ const d = new Date(iso); if (!isNaN(d)) return d.toLocaleString(); }catch{}
+      return iso || '';
+    }
+
     async function loadFeedback(){
-      const url = DEFAULT_CSV_URL;
+      const cfg = window.APP_CONFIG || {};
+      if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY){
+        alert('Chưa cấu hình Supabase');
+        return;
+      }
+      const table = cfg.SUPABASE_FEEDBACK_TABLE || 'feedback';
+      const url = `${cfg.SUPABASE_URL}/rest/v1/${table}?select=message,ctx,user,created_at&order=created_at.desc&limit=200`;
       try{
-        const text = await fetchCSV(url);
-        const rows = parseRows(text);
+        const res = await fetch(url, { headers: { 'apikey': cfg.SUPABASE_ANON_KEY, 'Authorization': `Bearer ${cfg.SUPABASE_ANON_KEY}`, 'Accept': 'application/json' }, cache:'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const rows = await res.json();
+        tbody.innerHTML = '';
+        rows.forEach(r => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${fmtTs(r.created_at)}</td><td>${r.user || ''}</td><td>${r.message || ''}</td><td>${r.ctx || ''}</td>`;
+          tbody.appendChild(tr);
+        });
+      }catch(e){
+        alert(e.message||'Lỗi tải góp ý');
+      }
+    }
+    btn.addEventListener('click', loadFeedback);
+    window.addEventListener('DOMContentLoaded', loadFeedback);
+  </script>
         tbody.innerHTML = '';
         rows.forEach(cols => {
           const tr = document.createElement('tr');

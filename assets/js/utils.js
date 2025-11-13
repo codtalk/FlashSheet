@@ -1,6 +1,7 @@
 // utils.js - shared helpers for LearnEnglish
 // Centralized endpoints are loaded from `assets/js/config.js` which sets window.APP_CONFIG
 const APP_CFG = (window && window.APP_CONFIG) ? window.APP_CONFIG : {};
+const DS_MODE = (APP_CFG && APP_CFG.DATA_SOURCE) || 'sheet';
 const FEEDBACK_URL = APP_CFG.FEEDBACK_URL || '';
 
 // Storage keys
@@ -10,6 +11,23 @@ const SHEET_CFG_KEY = 'learnEnglish.sheetConfig.v2';
 // Load dataset: LOCAL-ONLY (do not fallback to file)
 // First-run bootstrap should be handled by callers using loadDatasetFromFile() then saveDatasetToLocal()
 async function loadDataset() {
+  // Supabase mode: return per-user SRS records (used for merging)
+  if (DS_MODE === 'supabase' && APP_CFG.SUPABASE_URL && APP_CFG.SUPABASE_ANON_KEY){
+    try{
+      const user = loadUser();
+      const table = APP_CFG.SUPABASE_SRS_TABLE || 'srs_user';
+      const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${table}?user=eq.${encodeURIComponent(user)}&select=*`;
+      const resp = await fetch(url, { headers: {
+        'apikey': APP_CFG.SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${APP_CFG.SUPABASE_ANON_KEY}`,
+        'Accept': 'application/json'
+      }});
+      if (!resp.ok) throw new Error('Supabase per-user SRS load failed');
+      const data = await resp.json();
+      console.log('Loaded per-user SRS data from Supabase:', data);
+      return Array.isArray(data) ? data : [];
+    }catch(e){ console.warn('Supabase loadDataset failed', e); return []; }
+  }
   // Load dataset for the current user from Apps Script endpoint if available;
   // fallback to published CSV when provided.
   try {
@@ -45,6 +63,28 @@ async function loadDataset() {
 
 // Load the DEFAULT sheet (no user param) — useful for shared 'Học từ' view
 async function loadDefaultDataset(){
+  // Supabase mode: load shared words table via REST
+  if (DS_MODE === 'supabase' && APP_CFG.SUPABASE_URL && APP_CFG.SUPABASE_ANON_KEY){
+    try{
+      const table = APP_CFG.SUPABASE_WORDS_TABLE || 'words_shared';
+      const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${table}?select=*`;
+      const resp = await fetch(url, { headers: {
+        'apikey': APP_CFG.SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${APP_CFG.SUPABASE_ANON_KEY}`,
+        'Accept': 'application/json'
+      }});
+      if (!resp.ok) throw new Error('Supabase words load failed');
+      const arr = await resp.json();
+      if (!Array.isArray(arr)) return [];
+      return arr.map(row => {
+        const meanings = toArray(row.meanings, row.meanings_text);
+        const examples = toArray(row.examples, row.examples_text);
+        const out = { word: row.word || '', meanings, examples };
+        ['pos','addedAt','reps','lapses','ease','interval','due','lastReview','selectedForStudy','selected'].forEach(k=>{ if (row[k] != null) out[k] = row[k]; });
+        return out;
+      });
+    }catch(e){ console.warn('Supabase loadDefaultDataset failed', e); return []; }
+  }
   try{
     const cfg = loadSheetConfig();
     const writeUrl = cfg && cfg.writeUrl;
@@ -93,8 +133,30 @@ function ensureUserPrompt(defaultName){
   const existing = loadUser();
   if (existing) return existing;
   try{
-    const promptName = window.prompt('Nhập tên người dùng (username) để dùng riêng 1 sheet:', defaultName || '');
-    if (promptName && promptName.trim()){ saveUser(promptName.trim()); return promptName.trim(); }
+    const promptName = window.prompt('Nhập tên người dùng (username) để đồng bộ tiến độ học:', defaultName || '');
+    if (promptName && promptName.trim()){
+      const uname = promptName.trim();
+      saveUser(uname);
+      // Best-effort: upsert into Supabase users table
+      try{
+        if (DS_MODE === 'supabase' && APP_CFG.SUPABASE_URL && APP_CFG.SUPABASE_ANON_KEY){
+          const table = APP_CFG.SUPABASE_USERS_TABLE || 'users';
+          const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${table}?on_conflict=username`;
+          const payload = [{ username: uname, created_at: new Date().toISOString() }];
+          fetch(url, {
+            method:'POST',
+            headers: {
+              'apikey': APP_CFG.SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${APP_CFG.SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify(payload)
+          }).catch(()=>{});
+        }
+      }catch{}
+      return uname;
+    }
   }catch{}
   return '';
 }
@@ -366,9 +428,143 @@ function clozeToDashes(text){
   if (!text) return text;
   return String(text).replace(/_{2,}/g, function(m){ return '-'.repeat(m.length); });
 }
+// Helpers to coerce DB values to arrays
+function toArray(arr, text){
+  if (Array.isArray(arr)) return arr.filter(Boolean).map(s=>String(s));
+  if (typeof text === 'string' && text.trim()) return text.split(/;\s*/).map(s=>s.trim()).filter(Boolean);
+  if (typeof arr === 'string' && arr.trim()) return arr.split(/;\s*/).map(s=>s.trim()).filter(Boolean);
+  return [];
+}
 // Append rows to Apps Script endpoint
 // rows: Array<{word, meanings: string[]}>; server decides how to store
 async function appendRowsToSheet(endpoint, rows){
+  // Supabase mode: upsert rows into appropriate tables via REST
+  if (DS_MODE === 'supabase' && APP_CFG.SUPABASE_URL && APP_CFG.SUPABASE_ANON_KEY){
+    const headers = {
+      'apikey': APP_CFG.SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${APP_CFG.SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Prefer': 'resolution=merge-duplicates'
+    };
+    const user = loadUser();
+    const wordsTable = APP_CFG.SUPABASE_WORDS_TABLE || 'words_shared';
+    const srsTable = APP_CFG.SUPABASE_SRS_TABLE || 'srs_user';
+    const feedbackTable = APP_CFG.SUPABASE_FEEDBACK_TABLE || 'feedback';
+    const out = [];
+    for (const r of (rows||[])){
+      try{
+        if (r && r.type === 'feedback'){
+          const body = JSON.stringify([{ message: r.message||'', ctx: r.ctx||'', user: r.user||user||'', created_at: new Date().toISOString() }]);
+          const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${feedbackTable}`;
+          const resp = await fetch(url+'?on_conflict=id', { method:'POST', headers, body });
+          if (!resp.ok) throw new Error('feedback upsert failed');
+          out.push({ ok:true, type:'feedback' });
+          continue;
+        }
+        // Prefer handling SRS writes first (avoid routing to words table when SRS fields present)
+        const hasSrs = r && (
+          r.addedAt != null || r.added_at != null || r.addedat != null ||
+          r.reps != null || r.lapses != null || r.ease != null || r.interval != null || r.due != null ||
+          r.lastReview != null || r.last_review != null || r.lastreview != null
+        );
+        if (r && r.word && hasSrs){
+          const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${srsTable}?on_conflict=user,word`;
+          const toNum = (v) => {
+            if (v === null || v === undefined) return null;
+            if (typeof v === 'number') return Math.round(v);
+            if (typeof v === 'string'){
+              // Prefer parsing as date first (handles ISO like 2025-11-13T...)
+              const pd = Date.parse(v);
+              if (!Number.isNaN(pd)) return pd;
+              // Fallback: numeric string
+              const pi = Number(v);
+              if (!Number.isNaN(pi)) return Math.round(pi);
+            }
+            return null;
+          };
+          const buildPayload = (style) => {
+            const baseUser = user || '';
+            const base = {
+              user: baseUser,
+              word: r.word,
+              addedAt: r.addedAt ?? r.added_at ?? r.addedat ?? null,
+              reps: r.reps ?? null,
+              lapses: r.lapses ?? null,
+              ease: r.ease ?? null,
+              interval: r.interval ?? null,
+              due: r.due ?? null,
+              lastReview: r.lastReview ?? r.last_review ?? r.lastreview ?? null
+            };
+            // Normalize numerics
+            base.addedAt = toNum(base.addedAt);
+            base.interval = toNum(base.interval);
+            base.due = toNum(base.due);
+            base.lastReview = toNum(base.lastReview);
+            if (style === 'snake'){
+              return [{
+                user: base.user,
+                word: base.word,
+                added_at: base.addedAt,
+                reps: base.reps,
+                lapses: base.lapses,
+                ease: base.ease,
+                interval: base.interval,
+                due: base.due,
+                last_review: base.lastReview
+              }];
+            }
+            if (style === 'flat'){
+              return [{
+                user: base.user,
+                word: base.word,
+                addedat: base.addedAt,
+                reps: base.reps,
+                lapses: base.lapses,
+                ease: base.ease,
+                interval: base.interval,
+                due: base.due,
+                lastreview: base.lastReview
+              }];
+            }
+            // default camel
+            return [base];
+          };
+          // Try styles in order to match DB schema: flat (addedat), snake_case, camelCase
+          let srsOk = false; let lastErr = null;
+          for (const style of ['flat','snake','camel']){
+            try{
+              const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(buildPayload(style)) });
+              if (resp.ok){ srsOk = true; break; }
+              lastErr = new Error(`HTTP ${resp.status}`);
+            }catch(e){ lastErr = e; }
+          }
+          if (!srsOk) throw (lastErr || new Error('srs upsert failed'));
+          if (srsOk){ out.push({ ok:true, type:'srs' }); }
+          continue;
+        }
+        // Upsert word metadata (meanings/examples/pos) — do NOT store selection flags in shared table
+        if (r && r.word){
+          const payload = [{
+            word: r.word || '',
+            meanings_text: Array.isArray(r.meanings) ? r.meanings.join('; ') : (r.meanings||''),
+            examples_text: Array.isArray(r.examples) ? r.examples.join('; ') : (r.examples||''),
+            pos: r.pos != null ? String(r.pos) : undefined
+          }];
+          // Remove undefined keys to avoid overwriting with null
+          const cleaned = payload.map(obj => {
+            const o = {}; Object.keys(obj).forEach(k=>{ if (obj[k] !== undefined) o[k] = obj[k]; }); return o;
+          });
+          const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${wordsTable}?on_conflict=word`;
+          const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(cleaned) });
+          if (!resp.ok) throw new Error('words upsert failed');
+          out.push({ ok:true, type:'word' });
+          continue;
+        }
+      }catch(err){ console.warn('Supabase append failed for row', r, err); }
+    }
+    return { ok:true, details: out };
+  }
   if (!endpoint) throw new Error('Thiếu Apps Script URL');
   // If this looks like an Apps Script endpoint and a user is set, append the user param
   try{
@@ -443,8 +639,39 @@ window.LE = {
   loadDefaultDataset,
   fetchJsonp,
   clozeToDashes,
+  toArray,
   appendRowsToSheet,
 };
+
+// --- First-load Supabase connectivity log (non-blocking) ---
+(function(){
+  try{
+    const isSupabase = (DS_MODE === 'supabase' && APP_CFG.SUPABASE_URL && APP_CFG.SUPABASE_ANON_KEY);
+    if (!isSupabase){
+      console.info('[FlashSheet] Data source:', DS_MODE || 'sheet');
+      return;
+    }
+    const wordsTable = APP_CFG.SUPABASE_WORDS_TABLE || 'words_shared';
+    const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${wordsTable}?select=word&limit=1`;
+    const headers = {
+      'apikey': APP_CFG.SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${APP_CFG.SUPABASE_ANON_KEY}`,
+      'Accept': 'application/json'
+    };
+    fetch(url, { headers, cache:'no-store' })
+      .then(async resp => {
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const sample = await resp.json().catch(()=>[]);
+        const msg = `[FlashSheet] Supabase connected (${wordsTable}). Sample: ${Array.isArray(sample) && sample.length ? sample[0].word : 'empty'}`;
+        try{ localStorage.setItem('supabase_last_ping', JSON.stringify({ ok:true, at: Date.now(), sample })); }catch{}
+        console.info(msg);
+      })
+      .catch(err => {
+        try{ localStorage.setItem('supabase_last_ping', JSON.stringify({ ok:false, at: Date.now(), error: String(err) })); }catch{}
+        console.error('[FlashSheet] Supabase connection failed:', err);
+      });
+  }catch(e){ /* ignore */ }
+})();
 
 // --- Optional: Web Speech (Text-to-Speech) helpers ---
 (function(){

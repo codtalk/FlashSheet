@@ -292,12 +292,25 @@
       SRS.saveStore(srsStore);
     }catch(e){ console.warn('SRS schedule failed', e); }
 
-    // Best-effort: push SRS update to configured Sheet so other devices can pick it up
+    // Best-effort: push SRS update so other devices can pick it up (Supabase or Sheet)
     try{
+      const appCfg = (window.APP_CONFIG || {});
+      const useSupabase = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL;
       const writeUrl = (sheetCfg && sheetCfg.writeUrl) || '';
-      if (writeUrl && window.LE && LE.appendRowsToSheet){
-  LE.appendRowsToSheet(writeUrl, [{ word: item.word, meanings: (item.meanings || []), examples: (item.examples || []), addedAt: card.addedAt, reps: card.reps, lapses: card.lapses, ease: card.ease, interval: card.interval, due: card.due, lastReview: card.lastReview }])
-          .catch(()=>{});
+      if ((useSupabase || writeUrl) && window.LE && LE.appendRowsToSheet){
+        // Send flat-case keys to match your srs_user schema (addedat, lastreview)
+        LE.appendRowsToSheet(writeUrl, [{
+          word: item.word,
+          meanings: (item.meanings || []),
+          examples: (item.examples || []),
+          addedat: card.addedAt,
+          reps: card.reps,
+          lapses: card.lapses,
+          ease: card.ease,
+          interval: card.interval,
+          due: card.due,
+          lastreview: card.lastReview,
+        }]).catch(()=>{});
       }
     }catch(e){ /* ignore */ }
     // NOTE: do NOT auto-advance to the next card here. Keep the user on the current card
@@ -548,8 +561,9 @@
     try{ localStorage.setItem(FEEDBACK_BUF_KEY, JSON.stringify(buf||[])); }catch{}
   }
   async function flushFeedbackBuffer(){
+    const appCfg = (window.APP_CONFIG || {});
+    const useSupabase = appCfg.DATA_SOURCE === 'supabase' && !!appCfg.SUPABASE_URL;
     const central = LE && LE.FEEDBACK_URL;
-    if (!central) return;
     const buf = loadFeedbackBuffer();
     if (!buf.length) return;
     try{
@@ -557,7 +571,8 @@
         if (typeof item === 'string') return { type:'feedback', message: item, ctx:'', user:'' };
         return { type:'feedback', message: item.message||'', ctx:item.ctx||'', user:item.user||'' };
       });
-      await LE.appendRowsToSheet(central, rows);
+      // In Supabase mode, endpoint is ignored; pass empty string safely
+      await LE.appendRowsToSheet(useSupabase ? '' : central, rows);
       saveFeedbackBuffer([]);
     }catch(err){ /* keep buffer */ }
   }
@@ -569,15 +584,12 @@
     const ctx = ctxWord ? ` | ctx: word=${ctxWord}` : '';
     const name = (feedbackUser?.value || '').trim();
     const full = `${msg}${ctx}`;
+    const appCfg = (window.APP_CONFIG || {});
+    const useSupabase = appCfg.DATA_SOURCE === 'supabase' && !!appCfg.SUPABASE_URL;
     const central = LE && LE.FEEDBACK_URL;
-    if (!central) {
-      const buf = loadFeedbackBuffer(); buf.push({ message: full, ctx:'', user:name }); saveFeedbackBuffer(buf);
-      feedbackText.value = '';
-      alert('Không có endpoint góp ý. Đã lưu tạm góp ý và sẽ gửi khi có cấu hình.');
-      return;
-    }
     try{
-      await LE.appendRowsToSheet(central, [{ type:'feedback', message: full, ctx:'', user:name }]);
+      // Prefer Supabase table if configured; fall back to central endpoint if present
+      await LE.appendRowsToSheet(useSupabase ? '' : central, [{ type:'feedback', message: full, ctx:'', user:name }]);
       feedbackText.value = '';
       alert('Đã gửi góp ý. Cám ơn bạn!');
     }catch(err){
@@ -597,6 +609,8 @@
   });
 
   async function init(){
+    // Ensure username exists on first visit and upsert to users table
+    try{ ensureUserPrompt(''); }catch{}
     loadProgress();
     // Do not prompt for username here to avoid blocking page load on some browsers
     // Load toggles from localStorage
@@ -697,19 +711,42 @@
       const t = setTimeout(()=>{ if (!done){ done=true; reject(new Error('timeout')); } }, ms);
       p.then(v=>{ if (!done){ done=true; clearTimeout(t); resolve(v); }}).catch(e=>{ if (!done){ done=true; clearTimeout(t); reject(e); }});
     });
-    // Load dataset from Google Sheet (Sheet is the single source of truth)
+    // Load dataset for PRACTICE from per-user SRS (srs_user), then map details from words_shared
+    // This ensures luyện tập chỉ lấy các từ đã chọn (có trong srs_user)
     try{
-      try{
-        dataset = await withTimeout(LE.loadDataset(), 7000);
-      }catch(err1){
-        console.warn('LE.loadDataset timed out/failed, falling back to default sheet', err1);
-        dataset = await withTimeout(LE.loadDefaultDataset(), 7000).catch(()=>[]);
-      }
+      const perUser = await withTimeout(LE.loadDataset(), 7000).catch(()=>[]); // srs_user rows for current user
+      const shared = await withTimeout(LE.loadDefaultDataset(), 7000).catch(()=>[]); // words_shared
+      const byWord = new Map();
+      (Array.isArray(shared) ? shared : []).forEach(w => {
+        const key = (w && w.word) ? w.word.toString().trim().toLowerCase() : '';
+        if (key) byWord.set(key, w);
+      });
+      const joined = [];
+      (Array.isArray(perUser) ? perUser : []).forEach(u => {
+        const key = (u && u.word) ? u.word.toString().trim().toLowerCase() : '';
+        if (!key) return;
+        const base = byWord.get(key) || { word: u.word, meanings: [], examples: [], pos: '' };
+        // Normalize SRS fields: map flat-case to camel expected by SRS engine
+        const addedAt = (u.addedAt != null) ? u.addedAt : (u.added_at != null ? u.added_at : (u.addedat != null ? u.addedat : null));
+        const lastReview = (u.lastReview != null) ? u.lastReview : (u.last_review != null ? u.last_review : (u.lastreview != null ? u.lastreview : null));
+        const row = Object.assign({}, base, {
+          // Ensure canonical camel fields present for in-memory scheduling
+          addedAt: addedAt,
+          lastReview: lastReview,
+          reps: (u.reps != null ? Number(u.reps) : null),
+          lapses: (u.lapses != null ? Number(u.lapses) : null),
+          ease: (u.ease != null ? Number(u.ease) : null),
+          interval: (u.interval != null ? Number(u.interval) : null),
+          due: (u.due != null ? Number(u.due) : null)
+        });
+        joined.push(row);
+      });
+      dataset = joined;
     }catch(err){ dataset = []; console.warn('Dataset load failed', err); }
     if (!Array.isArray(dataset)) dataset = [];
     if (dataset.length === 0) {
       // Better message if all words were filtered or nothing loaded
-      questionText.textContent = 'Không tải được dữ liệu. Vào trang “Nhập dữ liệu” để cấu hình Google Sheet hoặc kiểm tra mạng.';
+      questionText.textContent = 'Không tải được dữ liệu. Vào trang “Nhập dữ liệu” để thêm dữ liệu hoặc kiểm tra mạng.';
       qIndex.textContent = '0/0';
       return;
     }
@@ -728,18 +765,20 @@
     // attempt to flush any pending feedback if write URL is available
     flushFeedbackBuffer();
 
-    // Daily prompt to set up Google Sheet (Write URL) if missing
+    // Daily prompt to set up Google Sheet only if we're in Sheet mode
     try{
-      const cfg = (LE.loadSheetConfig && LE.loadSheetConfig()) || {};
-      const writeMissing = !cfg.writeUrl;
-      if (writeMissing) {
-        const today = new Date();
-        const dayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`; // local YYYY-MM-DD
-        const last = localStorage.getItem(SHEET_PROMPT_KEY) || '';
-        if (last !== dayKey) {
-          // show modal
-          if (sheetModal) { sheetModal.style.display = 'block'; sheetModal.setAttribute('aria-hidden','false'); }
-          localStorage.setItem(SHEET_PROMPT_KEY, dayKey);
+      const appCfg = (window.APP_CONFIG || {});
+      if (appCfg.DATA_SOURCE !== 'supabase'){
+        const cfg = (LE.loadSheetConfig && LE.loadSheetConfig()) || {};
+        const writeMissing = !cfg.writeUrl;
+        if (writeMissing) {
+          const today = new Date();
+          const dayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`; // local YYYY-MM-DD
+          const last = localStorage.getItem(SHEET_PROMPT_KEY) || '';
+          if (last !== dayKey) {
+            if (sheetModal) { sheetModal.style.display = 'block'; sheetModal.setAttribute('aria-hidden','false'); }
+            localStorage.setItem(SHEET_PROMPT_KEY, dayKey);
+          }
         }
       }
     }catch{}

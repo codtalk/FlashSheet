@@ -24,7 +24,23 @@
   <main class="container narrow">
     <h1 class="page-title">Nhập dữ liệu từ vựng</h1>
 
-    <form id="wordForm" class="data-form">
+    <section class="io-panel" id="supabase-tools">
+      <h2>Kết nối Database (Supabase)</h2>
+      <p class="hint">Khi bật chế độ Database, dữ liệu sẽ đọc/ghi trực tiếp qua Supabase REST API.</p>
+      <div class="io-actions">
+        <button id="btnSupabaseCheck" class="btn">Kiểm tra kết nối</button>
+      </div>
+      <div id="supabaseStatus" class="hint"></div>
+
+      <h3>Dán nhanh và nhập</h3>
+      <p class="hint">Dán bảng TSV/CSV: cột 1 = ngày (bỏ qua), cột 2 = từ, cột 3 = chọn (bỏ qua), cột 4 = nghĩa (phân cách bằng dấu chấm phẩy ;), cột 5 = ví dụ (phân cách bằng ;).</p>
+      <textarea id="pasteData" class="answer-input" rows="6" placeholder="Dán dữ liệu ở đây (TSV/CSV)"></textarea>
+      <div class="io-actions">
+        <button id="btnSupabasePasteImport" class="btn">Nhập từ văn bản lên Supabase</button>
+      </div>
+    </section>
+
+  <form id="wordForm" class="data-form">
       <div class="form-row">
         <label for="wordInput">Từ vựng</label>
   <input type="text" id="wordInput" class="answer-input word-input" placeholder="Nhập từ (ví dụ: apple)" required />
@@ -49,7 +65,7 @@
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn primary">Lưu vào trình duyệt</button>
+        <button type="submit" class="btn primary">Lưu vào Database</button>
         <button type="button" id="btnReset" class="btn secondary">Xóa trắng</button>
       </div>
     </form>
@@ -74,41 +90,7 @@
 
     
 
-    <section class="io-panel" id="sheet-config">
-      <h2>Đồng bộ Google Sheet</h2>
-      <p class="hint">Để đọc tự động, hãy Publish sheet thành CSV (File → Share → Publish to web) và dán URL CSV. Để ghi tự động, triển khai Apps Script nhận POST (mẫu có trong README) rồi dán URL web app ở dưới.</p>
-      <div class="form-row">
-        <label for="sheetCsvUrl">CSV URL (Publish to web → CSV)</label>
-        <input type="url" id="sheetCsvUrl" class="answer-input" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" />
-      </div>
-      <div class="form-row">
-        <label for="sheetWriteUrl">Apps Script Write URL (tuỳ chọn, để auto-append)</label>
-        <input type="url" id="sheetWriteUrl" class="answer-input" placeholder="https://script.google.com/macros/s/.../exec" />
-      </div>
-      <div class="form-row">
-        <label for="sheetTranslateUrl">Apps Script Translate URL (tuỳ chọn, dịch câu)</label>
-        <input type="url" id="sheetTranslateUrl" class="answer-input" placeholder="https://script.google.com/macros/s/.../exec" />
-      </div>
-      <div class="form-row">
-        <label for="sheetTtsUrl">Apps Script TTS URL (tuỳ chọn, phát âm qua audio)</label>
-        <input type="url" id="sheetTtsUrl" class="answer-input" placeholder="https://script.google.com/macros/s/.../exec" />
-        <div class="hint">Endpoint nên trả về audio/mp3 khi GET: <code>?text=...&lang=en</code>. Dùng để fallback khi Web Speech bị chặn.</div>
-      </div>
-      <div class="form-row">
-        <button type="button" id="btnUseThienPreset" class="btn secondary">Dùng bộ từ của thienpahm (lưu vào storage)</button>
-      </div>
-      <div class="form-row">
-        <label><input type="checkbox" id="sheetAutoOnLearn" /> Tự động tải từ Sheet khi mở trang học</label>
-      </div>
-      <div class="form-row">
-        <label for="sheetRefreshSec">Khoảng làm mới (giây)</label>
-        <input type="number" id="sheetRefreshSec" class="answer-input" value="120" min="15" />
-      </div>
-      <div class="io-actions">
-        <button id="btnSheetLoad" class="btn">Tải từ Sheet</button>
-        <button id="btnSheetSaveCfg" class="btn secondary">Lưu cấu hình</button>
-      </div>
-    </section>
+    
 
     <!-- Move the dataset box to the very bottom, collapsible by default -->
     <section class="dataset-list">
