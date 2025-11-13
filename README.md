@@ -43,6 +43,8 @@ Sử dụng REST API của Supabase (PostgREST) với khóa anon. Các bảng m�
   - streak_count integer            # tuỳ chọn: chuỗi ngày hiện tại
   - best_streak integer             # tuỳ chọn: kỷ lục chuỗi ngày
   - last_active timestamptz         # tuỳ chọn: lần hoạt động gần nhất
+  - new_words_today integer         # Số từ mới người dùng đã bắt đầu trong ngày (đếm khi bấm "Học từ này")
+  - new_words_date date             # Ngày tương ứng (YYYY-MM-DD) của bộ đếm `new_words_today`
 
 - feedback
   - id uuid default gen_random_uuid() primary key
@@ -90,6 +92,9 @@ create table if not exists public.users (
   streak_count integer,
   best_streak integer,
   last_active timestamptz,
+  -- Theo dõi số từ mới/ngày (được cập nhật khi người dùng bấm "Học từ này")
+  new_words_today integer NOT NULL DEFAULT 0,
+  new_words_date date,
   primary key (username)
 );
 

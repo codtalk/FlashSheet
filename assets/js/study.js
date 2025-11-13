@@ -27,6 +27,8 @@
   let cur = 0;
   let touchStartX = null;
   const logPrefix = '[Study/TTS]';
+  const TODAY_PLAN_KEY = 'fs_today_plan';
+  const DAILY_NEW_LIMIT_KEY = 'fs_srs_daily_new_limit';
 
   function showToast(msg, kind='error'){
     try{
@@ -301,6 +303,30 @@
   }
 
   // Select current word for practice: mark locally and persist to srs_user (Supabase)
+  // Sync daily plan (new words) to Supabase users table
+  async function syncDailyPlanToSupabase(newsDone) {
+    try {
+      const appCfg = (window.APP_CONFIG||{});
+      const isSB = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL && appCfg.SUPABASE_ANON_KEY;
+      if (!isSB) return;
+      const username = (typeof loadUser === 'function') ? (loadUser() || '') : '';
+      if (!username) return;
+      const table = appCfg.SUPABASE_USERS_TABLE || 'users';
+      const url = `${appCfg.SUPABASE_URL}/rest/v1/${table}?on_conflict=username`;
+      const headers = {
+        'apikey': appCfg.SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${appCfg.SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      };
+      const today = new Date();
+      const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+      const ext = [{ username, new_words_today: Number(newsDone||0), new_words_date: todayKey }];
+      await fetch(url, { method:'POST', headers, body: JSON.stringify(ext) });
+    } catch (err) { /* swallow network/schema errors */ }
+  }
+
   btnSelectForPractice?.addEventListener('click', async (e) => {
     e.stopPropagation();
     if (!dataset || dataset.length === 0) { showToast('Không có từ để chọn', 'error'); return; }
@@ -341,6 +367,37 @@
   const row = Object.assign({ word: item.word, meanings: (item.meanings || []), examples: (item.examples || []) }, srs);
       if (useSupabase){ await LE.appendRowsToSheet('', [row]); }
     }catch(err){ console.warn('Persist selection failed', err); }
+    // Update today's "new words" counter immediately when user opts-in to learn this word
+    try{
+      const today = todayKey();
+      const loadPlan = ()=>{
+        try{ const x = JSON.parse(localStorage.getItem(TODAY_PLAN_KEY)||'null');
+          if (x && x.date === today){ return {
+            date: x.date,
+            reviewsDone: Number(x.reviewsDone||0),
+            newsDone: Number(x.newsDone||0),
+            reviewedSet: new Set(Array.isArray(x.reviewed)?x.reviewed:[]),
+            newSet: new Set(Array.isArray(x.newed)?x.newed:[])
+          }; }
+        }catch{}
+        return { date: today, reviewsDone:0, newsDone:0, reviewedSet:new Set(), newSet:new Set() };
+      };
+      const savePlan = (p)=>{
+        try{ localStorage.setItem(TODAY_PLAN_KEY, JSON.stringify({
+          date: p.date,
+          reviewsDone: Number(p.reviewsDone||0),
+          newsDone: Number(p.newsDone||0),
+          reviewed: Array.from(p.reviewedSet||[]),
+          newed: Array.from(p.newSet||[])
+        })); }catch{}
+      };
+      const plan = loadPlan();
+      const wordKey = String(item.word||'').toLowerCase();
+      if (wordKey){ plan.newSet.add(wordKey); plan.newsDone = plan.newSet.size; }
+      savePlan(plan);
+      // Sync lên Supabase
+      syncDailyPlanToSupabase(plan.newsDone);
+    }catch(err){ /* ignore plan update errors */ }
   // Previously we auto-redirected the user to the practice tab here.
   // Keep the user on the Study page after selecting a word for practice so they can continue browsing.
   // If you want to navigate programmatically, you can uncomment the line below.

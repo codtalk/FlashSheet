@@ -31,6 +31,18 @@
   const btnReplayTTS = document.getElementById('btnReplayTTS');
   const btnTransReadSentence = document.getElementById('btnTransReadSentence');
   const questionPos = document.getElementById('questionPos');
+  // Daily plan DOM
+  const planDueCountEl = document.getElementById('planDueCount');
+  const planNewTargetEl = document.getElementById('planNewTarget');
+  const planTotalLeftEl = document.getElementById('planTotalLeft');
+  const inpDailyNewLimit = document.getElementById('inpDailyNewLimit');
+  const inpDailyReviewLimit = document.getElementById('inpDailyReviewLimit');
+  const barReviews = document.getElementById('barReviews');
+  const barNews = document.getElementById('barNews');
+  const planReviewsDoneEl = document.getElementById('planReviewsDone');
+  const planReviewsTotalEl = document.getElementById('planReviewsTotal');
+  const planNewsDoneEl = document.getElementById('planNewsDone');
+  const planNewTarget2El = document.getElementById('planNewTarget2');
 
   let dataset = [];
   let queue = []; // array of indices
@@ -58,6 +70,10 @@
   let srsQueue = []; // array of word keys (due first then new)
   const DAILY_NEW_LIMIT_KEY = 'fs_srs_daily_new_limit';
   const DEFAULT_DAILY_NEW_LIMIT = 20;
+  const DAILY_REVIEW_LIMIT_KEY = 'fs_srs_daily_review_limit';
+  const TODAY_PLAN_KEY = 'fs_today_plan';
+  let mustTypeCorrect = false; // require user to type correct answer after a wrong submission
+  let correctionWord = '';
   // Streak storage
   const STREAK_KEY = 'fs_streak';
 
@@ -325,11 +341,19 @@
       card.classList.add('correct');
       LE.confettiBurst(confettiCanvas);
       if (choiceEl) choiceEl.classList.add('correct');
+      mustTypeCorrect = false; correctionWord = '';
+      // re-enable Next button if it was disabled due to correction
+      if (btnNext) btnNext.disabled = false;
     } else {
       wrongCount++;
-      feedback.textContent = `Sai rồi. Đáp án: ${dataset[index].word}`;
+      const ans = dataset[index].word;
+      feedback.textContent = `Sai rồi. Đáp án: ${ans}. Hãy gõ lại chính xác để tiếp tục.`;
       card.classList.add('wrong');
       if (choiceEl) choiceEl.classList.add('wrong');
+      // Force user to type the correct answer before proceeding
+      mustTypeCorrect = true; correctionWord = ans;
+      if (btnNext) btnNext.disabled = true;
+      try{ renderCorrectionInput(ans); }catch{}
     }
     updateStats();
     answered = true;
@@ -349,6 +373,42 @@
     try{ doPostAnswer(item, ok); }catch{}
     // Auto-schedule SRS based on result (no manual quality selection)
     try{ autoSchedule(item, ok, p); }catch{}
+  }
+
+  // Show a small input box to force the correct answer after a wrong attempt
+  function renderCorrectionInput(answer){
+    if (!answerArea) return;
+    // Remove existing correction box if any
+    const old = document.getElementById('correctionBox');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    const box = document.createElement('div');
+    box.id = 'correctionBox';
+    box.className = 'correction-box';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'answer-input';
+    input.placeholder = 'Gõ lại đáp án đúng để tiếp tục';
+    const btn = document.createElement('button');
+    btn.className = 'btn secondary';
+    btn.textContent = 'Xác nhận';
+    const check = ()=>{
+      const ok = normalize(input.value) === normalize(answer);
+      if (ok){
+        mustTypeCorrect = false; correctionWord = '';
+        // visually acknowledge
+        box.innerHTML = '<div class="hint">Đã nhập đúng. Bạn có thể tiếp tục.</div>';
+        if (btnNext) btnNext.disabled = false;
+      } else {
+        // keep disabled
+        if (btnNext) btnNext.disabled = true;
+      }
+    };
+    input.addEventListener('keydown', (e)=>{ if (e.key==='Enter'){ check(); }});
+    btn.addEventListener('click', check);
+    box.appendChild(input); box.appendChild(btn);
+    answerArea.appendChild(box);
+    // focus for convenience
+    try{ input.focus(); }catch{}
   }
   
   // Auto-schedule SRS after each answer (no manual quality selection)
@@ -409,14 +469,11 @@
 
   function buildSRSQueue(){
     if (!(window.SRS)) return [];
-    const dailyLimit = parseInt(localStorage.getItem(DAILY_NEW_LIMIT_KEY),10);
-    const limit = isNaN(dailyLimit) ? DEFAULT_DAILY_NEW_LIMIT : dailyLimit;
-    const dailyReviewLimit = parseInt(localStorage.getItem('fs_srs_daily_review_limit'),10) || 0;
-    // If user has selected specific words for practice, build queue only from those
+    const now = Date.now();
+    // Chỉ lấy thẻ đã học (reps > 0) và đến hạn (due <= bây giờ)
     const hasSelection = dataset.some(itemIsSelected);
-    const practiceDataset = hasSelection ? dataset.filter(d => itemIsSelected(d)) : dataset;
-    const result = SRS.buildQueue(practiceDataset, { dailyNewLimit: limit, dailyReviewLimit });
-    srsQueue = result.combined; // store word keys
+    const practiceDataset = (hasSelection ? dataset.filter(d => itemIsSelected(d)) : dataset) || [];
+    srsQueue = practiceDataset.filter(card => (Number(card.reps) > 0) && (Number(card.due) || 0) <= now);
   }
 
   function advanceSRSQueue(){
@@ -609,14 +666,19 @@
 
   function nextQuestion(){
     if (!dataset.length) return;
-    // Prefer SRS queue
+    // Luôn rebuild SRS queue trước khi chọn câu hỏi
+    buildSRSQueue();
     if (srsQueue && srsQueue.length){
-      const wk = srsQueue[0];
-      const idx = dataset.findIndex(d => keyForWord(d.word) === wk);
+      // Chỉ lấy thẻ đến hạn ôn lại
+      const idx = dataset.findIndex(d => keyForWord(d.word) === keyForWord(srsQueue[0].word));
       if (idx >= 0){ current = idx; setQuestion(idx); return; }
     }
-    const next = pickNextIndex();
-    if (next < 0) return; current = next; setQuestion(current);
+    // Không còn thẻ đến hạn ôn lại
+    try{
+      questionText.textContent = 'Hôm nay bạn đã hoàn thành hết các thẻ cần ôn lại!';
+      qIndex.textContent = '0/0';
+      if (btnNext) btnNext.disabled = true;
+    }catch{}
   }
 
   function reshuffle(){
@@ -632,6 +694,14 @@
 
   btnShuffle.addEventListener('click', reshuffle);
   btnNext.addEventListener('click', () => {
+    // Do not allow advancing until user typed the correct answer after a wrong attempt
+    if (mustTypeCorrect){
+      // gentle nudge: shake feedback
+      try{ card.classList.remove('wrong'); void card.offsetWidth; card.classList.add('wrong'); }catch{}
+      return;
+    }
+    // Update daily counters for the current card before moving on
+    try{ tallyTodayForCurrent(); }catch{}
     // If using SRS queue, advance it properly to avoid repeating the same word
     if (srsQueue && srsQueue.length) return advanceSRSQueue();
     // Fallback to weight-based next
@@ -851,6 +921,8 @@
     reshuffle();
     // Render SRS counts after initial load
     renderSRSCounts();
+  // Initialize daily plan UI
+  try{ initDailyPlanUI(); renderDailyPlan(); }catch{}
 
     // No auto-refresh from Sheet; use the reload button to refresh from file
     // attempt to flush any pending feedback if write URL is available
@@ -934,5 +1006,104 @@
   autoSchedule = function(item, ok, p){
     try{ origAutoSchedule(item, ok, p); }catch(e){ console.warn('orig autoSchedule error', e); }
     afterSchedule();
+    try{ renderDailyPlan(); }catch{}
   };
+
+  // ===== Daily plan logic =====
+  function loadTodayPlan(){
+    const today = todayKey();
+    try{
+      const x = JSON.parse(localStorage.getItem(TODAY_PLAN_KEY)||'null');
+      if (x && x.date === today){
+        x.reviewedSet = new Set(Array.isArray(x.reviewed)||[]);
+        x.newSet = new Set(Array.isArray(x.newed)||[]);
+        return x;
+      }
+    }catch{}
+    return { date: today, reviewsDone:0, newsDone:0, reviewedSet:new Set(), newSet:new Set() };
+  }
+  function saveTodayPlan(plan){
+    try{
+      const obj = {
+        date: plan.date,
+        reviewsDone: Number(plan.reviewsDone||0),
+        newsDone: Number(plan.newsDone||0),
+        reviewed: Array.from(plan.reviewedSet||[]),
+        newed: Array.from(plan.newSet||[])
+      };
+      localStorage.setItem(TODAY_PLAN_KEY, JSON.stringify(obj));
+    }catch{}
+  }
+  function initDailyPlanUI(){
+    // Seed inputs from localStorage or defaults
+    const n = parseInt(localStorage.getItem(DAILY_NEW_LIMIT_KEY),10);
+    const newLimit = isNaN(n) ? DEFAULT_DAILY_NEW_LIMIT : n;
+    if (inpDailyNewLimit){ inpDailyNewLimit.value = String(newLimit); }
+    const r = parseInt(localStorage.getItem(DAILY_REVIEW_LIMIT_KEY),10);
+    if (inpDailyReviewLimit){ inpDailyReviewLimit.value = String(isNaN(r)?0:r); }
+    if (planNewTargetEl){ planNewTargetEl.textContent = String(newLimit); }
+    if (planNewTarget2El){ planNewTarget2El.textContent = String(newLimit); }
+    inpDailyNewLimit?.addEventListener('change', ()=>{
+      const v = Math.max(0, Math.min(200, parseInt(inpDailyNewLimit.value,10)||0));
+      inpDailyNewLimit.value = String(v);
+      try{ localStorage.setItem(DAILY_NEW_LIMIT_KEY, String(v)); }catch{}
+      if (planNewTargetEl) planNewTargetEl.textContent = String(v);
+      if (planNewTarget2El) planNewTarget2El.textContent = String(v);
+      // rebuild queue and rerender plan
+      try{ buildSRSQueue(); renderDailyPlan(); }catch{}
+    });
+    inpDailyReviewLimit?.addEventListener('change', ()=>{
+      const v = Math.max(0, Math.min(1000, parseInt(inpDailyReviewLimit.value,10)||0));
+      inpDailyReviewLimit.value = String(v);
+      try{ localStorage.setItem(DAILY_REVIEW_LIMIT_KEY, String(v)); }catch{}
+      try{ buildSRSQueue(); renderDailyPlan(); }catch{}
+    });
+  }
+  function computeTodayTotals(){
+    const now = Date.now();
+    const plan = loadTodayPlan();
+    // Totals
+    const dueTotal = (Array.isArray(dataset)?dataset:[]).filter(it => {
+      const due = Number(it.due)||0; const reps = Number(it.reps)||0;
+      // Treat due if scheduled and due time passed; brand new (reps==0 and no due) are not in dueTotal
+      return reps > 0 && due && due <= now;
+    }).length;
+    const dailyNewTarget = parseInt(localStorage.getItem(DAILY_NEW_LIMIT_KEY),10);
+    const newTarget = isNaN(dailyNewTarget) ? DEFAULT_DAILY_NEW_LIMIT : dailyNewTarget;
+    // Left counts (avoid negative)
+    const reviewsDone = plan.reviewedSet ? plan.reviewedSet.size : Number(plan.reviewsDone||0);
+    const reviewsLeft = Math.max(0, dueTotal - reviewsDone);
+    const newsDone = plan.newSet ? plan.newSet.size : Number(plan.newsDone||0);
+    const newsLeft = Math.max(0, newTarget - newsDone);
+    return { plan, dueTotal, newTarget, reviewsDone, reviewsLeft, newsDone, newsLeft };
+  }
+  function renderDailyPlan(){
+    if (!planDueCountEl) return; // UI not on this page
+    const { dueTotal, newTarget, reviewsDone, reviewsLeft, newsDone, newsLeft } = computeTodayTotals();
+    const totalLeft = reviewsLeft + newsLeft;
+    planDueCountEl.textContent = String(dueTotal);
+    if (planNewTargetEl) planNewTargetEl.textContent = String(newTarget);
+    if (planTotalLeftEl) planTotalLeftEl.textContent = String(totalLeft);
+    if (planReviewsDoneEl) planReviewsDoneEl.textContent = String(reviewsDone);
+    if (planReviewsTotalEl) planReviewsTotalEl.textContent = String(dueTotal);
+    if (planNewsDoneEl) planNewsDoneEl.textContent = String(newsDone);
+    if (planNewTarget2El) planNewTarget2El.textContent = String(newTarget);
+    // Bars
+    try{
+      const rPct = dueTotal>0 ? Math.min(100, Math.round(reviewsDone/dueTotal*100)) : 0;
+      const nPct = newTarget>0 ? Math.min(100, Math.round(newsDone/newTarget*100)) : 0;
+      if (barReviews) barReviews.style.width = rPct + '%';
+      if (barNews) barNews.style.width = nPct + '%';
+    }catch{}
+  }
+  function tallyTodayForCurrent(){
+    if (current == null || current < 0 || !dataset[current]) return;
+    const item = dataset[current];
+    const w = keyForWord(item.word);
+    const plan = loadTodayPlan();
+    // Practice tab only counts reviews (due items). New words are counted in Study tab when user selects “Học từ này”.
+    plan.reviewedSet.add(w); plan.reviewsDone = plan.reviewedSet.size;
+    saveTodayPlan(plan);
+    renderDailyPlan();
+  }
 })();
