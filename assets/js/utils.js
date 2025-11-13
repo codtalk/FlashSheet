@@ -142,17 +142,22 @@ function ensureUserPrompt(defaultName){
         if (DS_MODE === 'supabase' && APP_CFG.SUPABASE_URL && APP_CFG.SUPABASE_ANON_KEY){
           const table = APP_CFG.SUPABASE_USERS_TABLE || 'users';
           const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${table}?on_conflict=username`;
-          const payload = [{ username: uname, created_at: new Date().toISOString() }];
-          fetch(url, {
-            method:'POST',
-            headers: {
-              'apikey': APP_CFG.SUPABASE_ANON_KEY,
-              'Authorization': `Bearer ${APP_CFG.SUPABASE_ANON_KEY}`,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: JSON.stringify(payload)
-          }).catch(()=>{});
+          const headers = {
+            'apikey': APP_CFG.SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${APP_CFG.SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          };
+          const nowIso = new Date().toISOString();
+          const ext = [{ username: uname, created_at: nowIso, streak_count: 0, best_streak: 0, last_active: nowIso }];
+          // Try extended columns first; fall back to minimal if columns don't exist
+          fetch(url, { method:'POST', headers, body: JSON.stringify(ext) })
+            .then(resp => { if (!resp.ok) throw new Error('ext upsert failed'); })
+            .catch(()=>{
+              const minimal = [{ username: uname, created_at: nowIso }];
+              fetch(url, { method:'POST', headers, body: JSON.stringify(minimal) }).catch(()=>{});
+            });
         }
       }catch{}
       return uname;

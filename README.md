@@ -40,6 +40,9 @@ Sử dụng REST API của Supabase (PostgREST) với khóa anon. Các bảng m�
 - users
   - username text primary key
   - created_at timestamptz default now()
+  - streak_count integer            # tuỳ chọn: chuỗi ngày hiện tại
+  - best_streak integer             # tuỳ chọn: kỷ lục chuỗi ngày
+  - last_active timestamptz         # tuỳ chọn: lần hoạt động gần nhất
 
 - feedback
   - id uuid default gen_random_uuid() primary key
@@ -83,6 +86,10 @@ create table if not exists public.srs_user (
 create table if not exists public.users (
   username text not null,
   created_at timestamptz default now(),
+  -- Các cột tuỳ chọn cho streak (nếu muốn đồng bộ)
+  streak_count integer,
+  best_streak integer,
+  last_active timestamptz,
   primary key (username)
 );
 

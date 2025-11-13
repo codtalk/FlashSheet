@@ -12,6 +12,10 @@
   const confettiCanvas = document.getElementById('confettiCanvas');
   const statCorrect = document.getElementById('statCorrect');
   const statWrong = document.getElementById('statWrong');
+  // Streak elements
+  const streakWidget = document.getElementById('streakWidget');
+  const streakCountEl = document.getElementById('streakCount');
+  const bestStreakEl = document.getElementById('bestStreak');
   
   const btnResetProgress = document.getElementById('btnResetProgress');
   const btnSendFeedback = document.getElementById('btnSendFeedback');
@@ -54,6 +58,8 @@
   let srsQueue = []; // array of word keys (due first then new)
   const DAILY_NEW_LIMIT_KEY = 'fs_srs_daily_new_limit';
   const DEFAULT_DAILY_NEW_LIMIT = 20;
+  // Streak storage
+  const STREAK_KEY = 'fs_streak';
 
   function loadProgress(){ /* no-op: progress starts empty each session */ progress = {}; }
   function saveProgress(){ /* no-op: persistence removed */ }
@@ -67,6 +73,89 @@
   function updateStats(){
     statCorrect.textContent = String(correctCount);
     statWrong.textContent = String(wrongCount);
+  }
+
+  // --- Streak helpers ---
+  function todayKey(){
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+  function loadStreak(){
+    try{
+      const s = JSON.parse(localStorage.getItem(STREAK_KEY)||'null');
+      if (s && typeof s === 'object') return s;
+    }catch{}
+    return { count: 0, best: 0, lastDay: '' };
+  }
+  function saveStreak(s){
+    try{ localStorage.setItem(STREAK_KEY, JSON.stringify(s)); }catch{}
+  }
+  function updateStreakOnOpen(){
+    const s = loadStreak();
+    const today = todayKey();
+    if (s.lastDay === today){
+      renderStreak(s); return;
+    }
+    // compute if consecutive (yesterday)
+    const prev = s.lastDay ? new Date(s.lastDay+'T00:00:00') : null;
+    const now = new Date(today+'T00:00:00');
+    let inc = 1; // first day becomes 1
+    if (prev){
+      const diff = Math.round((now - prev) / 86400000);
+      if (diff === 1) inc = (s.count||0) + 1; // consecutive
+      else inc = 1; // reset streak
+    }
+    s.count = inc;
+    if (!s.best || inc > s.best) s.best = inc;
+    s.lastDay = today;
+    saveStreak(s);
+    renderStreak(s, { pulse: true, celebrate: true });
+    // Sync streak to Supabase users table (best-effort)
+    try{ syncStreakToSupabase(s); }catch{}
+  }
+  function renderStreak(s, opts={}){
+    try{
+      if (streakCountEl) streakCountEl.textContent = String(s.count||0);
+      if (bestStreakEl) bestStreakEl.textContent = String(s.best||0);
+      if (opts.pulse && streakWidget){
+        streakWidget.classList.add('pulse');
+        setTimeout(()=> streakWidget && streakWidget.classList.remove('pulse'), 900);
+      }
+      if (opts.celebrate && confettiCanvas && window.LE && LE.confettiBurst){
+        LE.confettiBurst(confettiCanvas);
+      }
+    }catch{}
+  }
+
+  // Push streak to Supabase users table if available
+  async function syncStreakToSupabase(streak){
+    try{
+      const appCfg = (window.APP_CONFIG||{});
+      const isSB = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL && appCfg.SUPABASE_ANON_KEY;
+      if (!isSB) return;
+      const username = (typeof loadUser === 'function') ? (loadUser() || '') : '';
+      if (!username) return;
+      const table = appCfg.SUPABASE_USERS_TABLE || 'users';
+      const url = `${appCfg.SUPABASE_URL}/rest/v1/${table}?on_conflict=username`;
+      const headers = {
+        'apikey': appCfg.SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${appCfg.SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      };
+      const nowIso = new Date().toISOString();
+      const ext = [{ username, streak_count: Number(streak.count||0), best_streak: Number(streak.best||0), last_active: nowIso }];
+      // Try extended payload first; if fails (columns missing), fallback to minimal to at least ensure user exists
+      const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(ext) });
+      if (!resp.ok){
+        const minimal = [{ username }];
+        await fetch(url, { method:'POST', headers, body: JSON.stringify(minimal) }).catch(()=>{});
+      }
+    }catch(err){ /* swallow network/schema errors */ }
   }
 
   // Helper: determine if an item is marked selected for practice
@@ -612,6 +701,8 @@
     // Ensure username exists on first visit and upsert to users table
     try{ ensureUserPrompt(''); }catch{}
     loadProgress();
+    // Update & render streak on app open
+    try{ updateStreakOnOpen(); }catch{}
     // Do not prompt for username here to avoid blocking page load on some browsers
     // Load toggles from localStorage
     try{

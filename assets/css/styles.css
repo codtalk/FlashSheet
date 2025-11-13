@@ -45,6 +45,24 @@ body{
 .toggle{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); font-size:14px; color:var(--text)}
 .toggle input{accent-color:#7c3aed}
 
+/* Streak widget */
+.streak-widget{
+  display:flex; flex-direction:column; align-items:flex-end; gap:4px;
+  padding:8px 12px; border-radius:14px;
+  background:linear-gradient(135deg, rgba(234,88,12,0.2), rgba(234,179,8,0.2));
+  border:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 8px 24px rgba(0,0,0,0.25);
+  min-width: 180px;
+}
+.streak-main{display:flex; align-items:center; gap:8px; font-weight:800}
+.streak-label{color:#fde68a}
+.streak-count{font-size:20px}
+.streak-unit{color:var(--muted); font-weight:600}
+.streak-sub{font-size:12px; color:var(--muted)}
+.streak-widget .flame{filter:drop-shadow(0 2px 6px rgba(234,88,12,0.6))}
+.streak-widget.pulse{animation:pulseBright .9s ease}
+@keyframes pulseBright{0%{transform:scale(1); box-shadow:0 8px 24px rgba(0,0,0,0.25)} 60%{transform:scale(1.04); box-shadow:0 16px 40px rgba(234,88,12,0.35)} 100%{transform:scale(1);}}
+
 .btn{background:linear-gradient(135deg, rgba(124,58,237,0.9), rgba(6,182,212,0.9)); border:none; color:white; padding:10px 14px; border-radius:12px; cursor:pointer; box-shadow:0 8px 20px var(--shadow); transition:transform .12s ease, filter .2s}
 .btn:hover{transform:translateY(-1px); filter:brightness(1.05)}
 .btn:active{transform:translateY(1px)}
@@ -233,6 +251,7 @@ textarea.answer-input{min-height:96px; resize:vertical; line-height:1.4}
   .nav-btn{padding:8px 12px; font-size:14px}
   .container{margin:16px auto}
   .controls{flex-direction:column; align-items:stretch; gap:10px}
+  .streak-widget{align-items:flex-start; min-width:unset; width:100%}
   .actions{flex-wrap:wrap}
   .card{padding:16px; min-height:220px}
   .question-text{font-size:18px}

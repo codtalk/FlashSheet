@@ -40,6 +40,15 @@
         <label class="toggle"><input type="checkbox" id="toggleTTS" checked> Tự động đọc</label>
         <label class="toggle"><input type="checkbox" id="toggleTrans" checked> Hiện dịch</label>
       </div>
+      <div class="streak-widget" id="streakWidget" aria-live="polite" title="Chuỗi ngày học liên tiếp">
+        <div class="streak-main">
+          <span class="flame" aria-hidden="true">🔥</span>
+          <span class="streak-label">Streak</span>
+          <span id="streakCount" class="streak-count">0</span>
+          <span class="streak-unit">ngày</span>
+        </div>
+        <div class="streak-sub"><span class="trophy" aria-hidden="true">🏆</span> Kỷ lục: <span id="bestStreak">0</span></div>
+      </div>
     </section>
 
   <!-- SRS due summary cards (small) -->
