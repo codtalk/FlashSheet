@@ -359,13 +359,23 @@
     try{
       const appCfg = (window.APP_CONFIG || {});
       const useSupabase = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL;
-      // include SRS fields if available
+      // include SRS fields if available; ensure we create a per-user SRS record immediately
       const srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {};
-  const srs = srsStore[(item.word||'').toLowerCase()] || {};
-  // Use flat-case to align with your srs_user schema (addedat)
-  if (!srs.addedat && !srs.added_at && !srs.addedAt) srs.addedat = Date.now();
+      const key = (item.word||'').toLowerCase();
+      let srs = srsStore[key] || {};
+      // Ensure local SRS card exists (in-memory) so buildQueue won't treat it as 'news'
+      try{ if (window.SRS && SRS.ensureCard) { SRS.ensureCard(srsStore, item.word); srs = srsStore[key]; } }catch(e){}
+      // Ensure flat-case fields for backend
+      if (!srs.addedat && !srs.added_at && !srs.addedAt) srs.addedat = Date.now();
+  // If reps isn't set, set to 1 so the card is considered 'learned' and eligible for review queue; set due to now
+  if (srs.reps === undefined || srs.reps === null) srs.reps = 1;
+      if (!srs.due && !srs.due_at && !srs.dueAt) srs.due = Date.now();
   const row = Object.assign({ word: item.word, meanings: (item.meanings || []), examples: (item.examples || []) }, srs);
-      if (useSupabase){ await LE.appendRowsToSheet('', [row]); }
+  // include per-user identifier field 'user' so backend record associates with this user
+  try{ const username = (typeof loadUser === 'function') ? (loadUser() || '') : ''; if (username) row.user = username; }catch(e){}
+  if (useSupabase){ await LE.appendRowsToSheet('', [row]); }
+      // also update local in-memory store if present
+      try{ if (window.SRS && SRS.loadStore && SRS.saveStore){ SRS.loadStore()[key] = srs; SRS.saveStore(SRS.loadStore()); } }catch(e){}
     }catch(err){ console.warn('Persist selection failed', err); }
     // Update today's "new words" counter immediately when user opts-in to learn this word
     try{

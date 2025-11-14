@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Danh sách từ của tôi</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <style>
+    .word-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    .word-table th, .word-table td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    .word-table th { background: #f5f5f5; }
+  </style>
+</head>
+<body>
+  <h1>Toàn bộ từ của tôi</h1>
+  <div style="margin-top:12px;">
+    <button id="btnPracticeNews" class="btn">Practice new words now</button>
+    <span class="muted" style="margin-left:8px;">(Set due=now for new words so they appear in practice)</span>
+  </div>
+  <table class="word-table" id="wordTable">
+    <thead>
+      <tr>
+        <th>Từ</th>
+        <th>Ngày thêm vào học</th>
+        <th>Lần xem cuối</th>
+        <th>Next due</th>
+        <th>Trạng thái</th>
+        <th>Số lần ôn tập</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Dữ liệu sẽ được render bằng JS -->
+    </tbody>
+  </table>
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/utils.js"></script>
+  <script src="assets/js/words.js"></script>
+</body>
+</html>

@@ -96,7 +96,9 @@
     });
     saveDaily(daily);
     const limitedReviews = dailyReviewLimit > 0 ? reviews.slice(0, dailyReviewLimit) : reviews;
-    return { reviews: limitedReviews, news, combined: [...limitedReviews, ...news] };
+    // Prioritize new words (news) before reviews so learners see new items earlier.
+    // Return combined with news first.
+    return { reviews: limitedReviews, news, combined: [...news, ...limitedReviews] };
   }
 
   window.SRS = {
