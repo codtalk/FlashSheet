@@ -68,6 +68,8 @@
   // SRS store
   let srsStore = {};
   let srsQueue = []; // array of word keys (due first then new)
+  // small ring buffer of recently-seen word keys to avoid immediate repeats
+  let recentSeen = [];
   const DAILY_NEW_LIMIT_KEY = 'fs_srs_daily_new_limit';
   const DEFAULT_DAILY_NEW_LIMIT = 20;
   const DAILY_REVIEW_LIMIT_KEY = 'fs_srs_daily_review_limit';
@@ -353,7 +355,6 @@
       // Force user to type the correct answer before proceeding
       mustTypeCorrect = true; correctionWord = ans;
       if (btnNext) btnNext.disabled = true;
-      try{ renderCorrectionInput(ans); }catch{}
     }
     updateStats();
     answered = true;
@@ -361,6 +362,10 @@
     answerArea.querySelectorAll('input,button.choice,.btn.primary').forEach(el => {
       el.disabled = true;
     });
+
+    // If the answer was wrong, render the correction input AFTER disabling the
+    // existing answer controls so the correction input stays enabled and focusable.
+    if (!ok){ try{ renderCorrectionInput(dataset[index].word); }catch{} }
 
     // Play SFX feedback
     try{
@@ -473,21 +478,42 @@
     // Chỉ lấy thẻ đã học (reps > 0) và đến hạn (due <= bây giờ)
     const hasSelection = dataset.some(itemIsSelected);
     const practiceDataset = (hasSelection ? dataset.filter(d => itemIsSelected(d)) : dataset) || [];
-    srsQueue = practiceDataset.filter(card => (Number(card.reps) > 0) && (Number(card.due) || 0) <= now);
+    // Include any card that has a due timestamp <= now so that newly-selected words (with due set)
+    // are included for practice even if reps === 0. This prevents new words from being skipped
+    // when we set due=now on selection while avoiding artificially bumping their reps.
+    srsQueue = practiceDataset.filter(card => ((Number(card.due) || 0) <= now));
   }
 
   function advanceSRSQueue(){
     // remove current word key
     const currentWord = (current >=0 && dataset[current]) ? keyForWord(dataset[current].word) : null;
     if (currentWord){
-      srsQueue = srsQueue.filter(k => k !== currentWord);
+      // srsQueue contains card objects; remove entries whose word matches currentWord
+      srsQueue = srsQueue.filter(k => {
+        try{ return keyForWord(k.word) !== currentWord; }catch(e){ return true; }
+      });
     }
     // Rebuild queue to include any newly due cards (e.g., Again after 10m) but skip immediate if due not yet passed
     buildSRSQueue();
-    // pick next by mapping word key to index
+    // pick next by mapping word key to dataset index
+    // First try to avoid recently-seen words to reduce repeats
     for (const wk of srsQueue){
-      const idx = dataset.findIndex(d => keyForWord(d.word) === wk);
-      if (idx >= 0){ current = idx; setQuestion(idx); return; }
+      try{
+        const wkKey = keyForWord(wk && wk.word ? wk.word : wk);
+        if (recentSeen.indexOf(wkKey) >= 0) continue;
+        const idx = dataset.findIndex(d => keyForWord(d.word) === wkKey);
+        if (idx >= 0){ current = idx; // push into recentSeen ring buffer
+          recentSeen.push(wkKey); if (recentSeen.length > 5) recentSeen.shift();
+          setQuestion(idx); return; }
+      }catch(e){ /* ignore malformed wk */ }
+    }
+    // If all candidates were recently seen or skipped, allow any due card
+    for (const wk of srsQueue){
+      try{
+        const wkKey = keyForWord(wk && wk.word ? wk.word : wk);
+        const idx = dataset.findIndex(d => keyForWord(d.word) === wkKey);
+        if (idx >= 0){ current = idx; recentSeen.push(wkKey); if (recentSeen.length > 5) recentSeen.shift(); setQuestion(idx); return; }
+      }catch(e){ /* ignore malformed wk */ }
     }
     // fallback: use weight-based selection
     nextQuestion();

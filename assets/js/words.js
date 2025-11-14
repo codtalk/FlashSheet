@@ -47,7 +47,7 @@
 
   async function renderWords(){
     const table = document.getElementById('wordTable').getElementsByTagName('tbody')[0];
-    table.innerHTML = '<tr><td colspan="4">Đang tải dữ liệu...</td></tr>';
+  table.innerHTML = '<tr><td colspan="6">Đang tải dữ liệu...</td></tr>';
     // Đảm bảo đã có hàm loadUser và ensureUserPrompt từ utils.js
     let username = '';
     if (typeof loadUser === 'function') {
@@ -62,7 +62,7 @@
     }
     const words = await fetchWordsFromSupabase(username);
     if (!words.length){
-      table.innerHTML = '<tr><td colspan="4">Chưa có từ nào được thêm vào.</td></tr>';
+      table.innerHTML = '<tr><td colspan="6">Chưa có từ nào được thêm vào.</td></tr>';
       return;
     }
     table.innerHTML = '';
@@ -126,7 +126,9 @@
         const url = `${cfg.SUPABASE_URL}/rest/v1/${table}?${filter}`;
         let success = false;
         try{
-          const resp = await fetch(url, { method: 'PATCH', headers, body: JSON.stringify({ due: now, reps: 1 }) });
+          // Only set due=now so the items become available for practice without
+          // accidentally promoting their reps (avoid setting reps here).
+          const resp = await fetch(url, { method: 'PATCH', headers, body: JSON.stringify({ due: now }) });
           if (!resp.ok){
             const txt = await resp.text().catch(()=>'');
             alert('Cập nhật thất bại: '+resp.status+' '+txt);
@@ -138,7 +140,7 @@
           }
         }catch(e){ console.warn('Attempt failed for user PATCH', e); alert('Lỗi khi cập nhật: '+(e && e.message ? e.message : e)); }
         if (!success){
-          console.warn('Practice new words update failed', lastErr);
+          console.warn('Practice new words update failed');
           alert('Không thể cập nhật các từ mới. Xem console để biết chi tiết.');
         }
         // refresh list

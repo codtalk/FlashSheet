@@ -367,8 +367,8 @@
       try{ if (window.SRS && SRS.ensureCard) { SRS.ensureCard(srsStore, item.word); srs = srsStore[key]; } }catch(e){}
       // Ensure flat-case fields for backend
       if (!srs.addedat && !srs.added_at && !srs.addedAt) srs.addedat = Date.now();
-  // If reps isn't set, set to 1 so the card is considered 'learned' and eligible for review queue; set due to now
-  if (srs.reps === undefined || srs.reps === null) srs.reps = 1;
+  // If reps isn't set, set to 0 (first encounter). We'll rely on due to include it in today's practice.
+  if (srs.reps === undefined || srs.reps === null) srs.reps = 0;
       if (!srs.due && !srs.due_at && !srs.dueAt) srs.due = Date.now();
   const row = Object.assign({ word: item.word, meanings: (item.meanings || []), examples: (item.examples || []) }, srs);
   // include per-user identifier field 'user' so backend record associates with this user
