@@ -70,6 +70,7 @@
   let srsQueue = []; // array of word keys (due first then new)
   // small ring buffer of recently-seen word keys to avoid immediate repeats
   let recentSeen = [];
+  const RECENT_LIMIT = 5;
   const DAILY_NEW_LIMIT_KEY = 'fs_srs_daily_new_limit';
   const DEFAULT_DAILY_NEW_LIMIT = 20;
   const DAILY_REVIEW_LIMIT_KEY = 'fs_srs_daily_review_limit';
@@ -444,6 +445,15 @@
       SRS.schedule(card, quality);
       srsStore[keyForWord(item.word)] = card;
       SRS.saveStore(srsStore);
+      // Keep dataset entry in sync so queue/daily counters reflect the new schedule immediately
+      try{
+        item.reps = card.reps;
+        item.due = card.due;
+        item.lastReview = card.lastReview;
+        item.interval = card.interval;
+        item.ease = card.ease;
+        item.lapses = card.lapses;
+      }catch{}
     }catch(e){ console.warn('SRS schedule failed', e); }
 
     // Best-effort: push SRS update so other devices can pick it up (Supabase or Sheet)
@@ -481,13 +491,20 @@
     // Include any card that has a due timestamp <= now so that newly-selected words (with due set)
     // are included for practice even if reps === 0. This prevents new words from being skipped
     // when we set due=now on selection while avoiding artificially bumping their reps.
-    srsQueue = practiceDataset.filter(card => ((Number(card.due) || 0) <= now));
+    srsQueue = practiceDataset.filter(card => {
+      const dueRaw = card && card.due;
+      const dueTs = Number(dueRaw);
+      if (!Number.isFinite(dueTs) || dueTs <= 0) return false;
+      return dueTs <= now;
+    });
   }
 
   function advanceSRSQueue(){
     // remove current word key
     const currentWord = (current >=0 && dataset[current]) ? keyForWord(dataset[current].word) : null;
     if (currentWord){
+      recentSeen.push(currentWord);
+      if (recentSeen.length > RECENT_LIMIT) recentSeen.shift();
       // srsQueue contains card objects; remove entries whose word matches currentWord
       srsQueue = srsQueue.filter(k => {
         try{ return keyForWord(k.word) !== currentWord; }catch(e){ return true; }
@@ -503,7 +520,7 @@
         if (recentSeen.indexOf(wkKey) >= 0) continue;
         const idx = dataset.findIndex(d => keyForWord(d.word) === wkKey);
         if (idx >= 0){ current = idx; // push into recentSeen ring buffer
-          recentSeen.push(wkKey); if (recentSeen.length > 5) recentSeen.shift();
+          recentSeen.push(wkKey); if (recentSeen.length > RECENT_LIMIT) recentSeen.shift();
           setQuestion(idx); return; }
       }catch(e){ /* ignore malformed wk */ }
     }
@@ -512,7 +529,7 @@
       try{
         const wkKey = keyForWord(wk && wk.word ? wk.word : wk);
         const idx = dataset.findIndex(d => keyForWord(d.word) === wkKey);
-        if (idx >= 0){ current = idx; recentSeen.push(wkKey); if (recentSeen.length > 5) recentSeen.shift(); setQuestion(idx); return; }
+        if (idx >= 0){ current = idx; recentSeen.push(wkKey); if (recentSeen.length > RECENT_LIMIT) recentSeen.shift(); setQuestion(idx); return; }
       }catch(e){ /* ignore malformed wk */ }
     }
     // fallback: use weight-based selection
@@ -711,6 +728,7 @@
     queue = LE.shuffle(dataset.map((_, idx) => idx));
     // không dùng tuần tự nữa, nhưng giữ queue để hiển thị tổng số
     current = -1;
+    recentSeen = [];
     nextQuestion();
   }
 
@@ -929,6 +947,7 @@
         joined.push(row);
       });
       dataset = joined;
+      recentSeen = [];
     }catch(err){ dataset = []; console.warn('Dataset load failed', err); }
     if (!Array.isArray(dataset)) dataset = [];
     if (dataset.length === 0) {
