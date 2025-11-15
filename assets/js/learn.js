@@ -17,7 +17,6 @@
   const streakCountEl = document.getElementById('streakCount');
   const bestStreakEl = document.getElementById('bestStreak');
   
-  const btnResetProgress = document.getElementById('btnResetProgress');
   const btnSendFeedback = document.getElementById('btnSendFeedback');
   const feedbackText = document.getElementById('feedbackText');
   const feedbackUser = document.getElementById('feedbackUser');
@@ -33,16 +32,11 @@
   const questionPos = document.getElementById('questionPos');
   // Daily plan DOM
   const planDueCountEl = document.getElementById('planDueCount');
-  const planNewTargetEl = document.getElementById('planNewTarget');
   const planTotalLeftEl = document.getElementById('planTotalLeft');
-  const inpDailyNewLimit = document.getElementById('inpDailyNewLimit');
   const inpDailyReviewLimit = document.getElementById('inpDailyReviewLimit');
   const barReviews = document.getElementById('barReviews');
-  const barNews = document.getElementById('barNews');
   const planReviewsDoneEl = document.getElementById('planReviewsDone');
   const planReviewsTotalEl = document.getElementById('planReviewsTotal');
-  const planNewsDoneEl = document.getElementById('planNewsDone');
-  const planNewTarget2El = document.getElementById('planNewTarget2');
 
   let dataset = [];
   let queue = []; // array of indices
@@ -71,10 +65,7 @@
   // small ring buffer of recently-seen word keys to avoid immediate repeats
   let recentSeen = [];
   const RECENT_LIMIT = 5;
-  const DAILY_NEW_LIMIT_KEY = 'fs_srs_daily_new_limit';
-  const DEFAULT_DAILY_NEW_LIMIT = 20;
   const DAILY_REVIEW_LIMIT_KEY = 'fs_srs_daily_review_limit';
-  const TODAY_PLAN_KEY = 'fs_today_plan';
   let mustTypeCorrect = false; // require user to type correct answer after a wrong submission
   let correctionWord = '';
   // Streak storage
@@ -488,15 +479,19 @@
     // Chỉ lấy thẻ đã học (reps > 0) và đến hạn (due <= bây giờ)
     const hasSelection = dataset.some(itemIsSelected);
     const practiceDataset = (hasSelection ? dataset.filter(d => itemIsSelected(d)) : dataset) || [];
-    // Include any card that has a due timestamp <= now so that newly-selected words (with due set)
-    // are included for practice even if reps === 0. This prevents new words from being skipped
-    // when we set due=now on selection while avoiding artificially bumping their reps.
+    // Only include due review cards: reps > 0 and due <= now.
     srsQueue = practiceDataset.filter(card => {
-      const dueRaw = card && card.due;
-      const dueTs = Number(dueRaw);
+      const reps = Number(card && card.reps) || 0;
+      const dueTs = Number(card && card.due);
+      if (reps <= 0) return false; // exclude brand-new cards from practice queue
       if (!Number.isFinite(dueTs) || dueTs <= 0) return false;
       return dueTs <= now;
     });
+    const { remaining } = getReviewProgress();
+    if (Number.isFinite(remaining)){
+      if (remaining <= 0){ srsQueue = []; return; }
+      srsQueue = srsQueue.slice(0, remaining);
+    }
   }
 
   function advanceSRSQueue(){
@@ -718,7 +713,14 @@
     }
     // Không còn thẻ đến hạn ôn lại
     try{
-      questionText.textContent = 'Hôm nay bạn đã hoàn thành hết các thẻ cần ôn lại!';
+      const { duePending, reviewsDone, reviewLimit, reviewsLeft } = computeTodayTotals();
+      if (reviewLimit != null && reviewsDone >= reviewLimit && duePending > 0){
+        questionText.textContent = `Bạn đã đạt giới hạn ôn lại hôm nay (${reviewLimit} thẻ). Quay lại sau nhé!`;
+      } else if (duePending > 0){
+        questionText.textContent = 'Bạn đã hoàn thành chỉ tiêu hôm nay. Các thẻ còn lại sẽ chuyển sang ngày mai.';
+      } else {
+        questionText.textContent = 'Hôm nay bạn đã hoàn thành hết các thẻ cần ôn lại!';
+      }
       qIndex.textContent = '0/0';
       if (btnNext) btnNext.disabled = true;
     }catch{}
@@ -745,7 +747,7 @@
       return;
     }
     // Update daily counters for the current card before moving on
-    try{ tallyTodayForCurrent(); }catch{}
+    try{ tallyTodayForCurrent().catch(()=>{}); }catch{}
     // If using SRS queue, advance it properly to avoid repeating the same word
     if (srsQueue && srsQueue.length) return advanceSRSQueue();
     // Fallback to weight-based next
@@ -801,20 +803,13 @@
     }
   });
 
-  btnResetProgress?.addEventListener('click', () => {
-    if (confirm('Xoá tiến độ học (thống kê phiên này)?')){
-      // Clear in-memory only
-      loadProgress();
-      correctCount = 0; wrongCount = 0; updateStats();
-      if (current >= 0) setQuestion(current); else nextQuestion();
-      alert('Đã xoá tiến độ tạm thời (không lưu local).');
-    }
-  });
-
   async function init(){
     // Ensure username exists on first visit and upsert to users table
     try{ ensureUserPrompt(''); }catch{}
     loadProgress();
+    try{ await refreshReviewState(); }catch{}
+    try{ initDailyPlanUI(); }catch{}
+    try{ renderDailyPlan(); }catch{}
     // Update & render streak on app open
     try{ updateStreakOnOpen(); }catch{}
     // Do not prompt for username here to avoid blocking page load on some browsers
@@ -966,8 +961,7 @@
     reshuffle();
     // Render SRS counts after initial load
     renderSRSCounts();
-  // Initialize daily plan UI
-  try{ initDailyPlanUI(); renderDailyPlan(); }catch{}
+    try{ renderDailyPlan(); }catch{}
 
     // No auto-refresh from Sheet; use the reload button to refresh from file
     // attempt to flush any pending feedback if write URL is available
@@ -1055,100 +1049,164 @@
   };
 
   // ===== Daily plan logic =====
-  function loadTodayPlan(){
-    const today = todayKey();
+  const appCfg = (window.APP_CONFIG || {});
+  const SUPABASE_USERS_TABLE = appCfg.SUPABASE_USERS_TABLE || 'users';
+  const SUPABASE_ENABLED = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL && appCfg.SUPABASE_ANON_KEY;
+  let reviewState = {
+    date: todayKey(),
+    reviewsDone: 0,
+    reviewLimit: null,
+    reviewedWords: new Set()
+  };
+
+  function parseReviewedWords(raw){
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'string'){
+      try{
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      }catch{}
+    }
+    return [];
+  }
+
+  async function refreshReviewState(){
+    reviewState.date = todayKey();
+    const username = (typeof loadUser === 'function') ? (loadUser() || '') : '';
+    reviewState.reviewedWords = new Set();
+    reviewState.reviewsDone = 0;
+    if (!SUPABASE_ENABLED || !username) return reviewState;
+    const headers = {
+      'apikey': appCfg.SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${appCfg.SUPABASE_ANON_KEY}`,
+      'Accept': 'application/json'
+    };
+    const select = 'reviews_today,reviews_date,daily_review_limit,reviewed_words_today';
+    const url = `${appCfg.SUPABASE_URL}/rest/v1/${SUPABASE_USERS_TABLE}?username=eq.${encodeURIComponent(username)}&select=${select}`;
+    let needsReset = false;
     try{
-      const x = JSON.parse(localStorage.getItem(TODAY_PLAN_KEY)||'null');
-      if (x && x.date === today){
-        x.reviewedSet = new Set(Array.isArray(x.reviewed) ? x.reviewed : []);
-        x.newSet = new Set(Array.isArray(x.newed) ? x.newed : []);
-        return x;
+      const resp = await fetch(url, { headers });
+      if (!resp.ok){ console.warn('Supabase review fetch failed', resp.status); }
+      else {
+        const rows = await resp.json();
+        if (Array.isArray(rows) && rows.length){
+          const row = rows[0] || {};
+          const rowDate = row.reviews_date || row.reviewsDate || row.reviews_date;
+          const limitRaw = row.daily_review_limit ?? row.dailyReviewLimit;
+          reviewState.reviewLimit = (limitRaw !== null && limitRaw !== undefined) ? Number(limitRaw) : null;
+          if (rowDate === reviewState.date){
+            const done = Number(row.reviews_today ?? row.reviewsToday ?? 0) || 0;
+            reviewState.reviewsDone = done;
+            const words = parseReviewedWords(row.reviewed_words_today ?? row.reviewedWordsToday);
+            words.forEach(w => reviewState.reviewedWords.add(keyForWord(w)));
+          } else {
+            needsReset = true;
+          }
+        } else {
+          needsReset = true;
+        }
       }
-    }catch{}
-    return { date: today, reviewsDone:0, newsDone:0, reviewedSet:new Set(), newSet:new Set() };
+    }catch(err){ console.warn('Supabase review fetch error', err); }
+    if (needsReset){
+      reviewState.reviewsDone = 0;
+      reviewState.reviewedWords = new Set();
+      try{ await persistReviewState(); }catch{}
+    }
+    return reviewState;
   }
-  function saveTodayPlan(plan){
+
+  async function persistReviewState(){
+    if (!SUPABASE_ENABLED) return;
+    const username = (typeof loadUser === 'function') ? (loadUser() || '') : '';
+    if (!username) return;
+    const headers = {
+      'apikey': appCfg.SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${appCfg.SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Prefer': 'resolution=merge-duplicates'
+    };
+    const payload = [{
+      username,
+      reviews_today: Number(reviewState.reviewsDone||0),
+      reviews_date: reviewState.date,
+      reviewed_words_today: Array.from(reviewState.reviewedWords),
+      daily_review_limit: reviewState.reviewLimit
+    }];
     try{
-      const obj = {
-        date: plan.date,
-        reviewsDone: Number(plan.reviewsDone||0),
-        newsDone: Number(plan.newsDone||0),
-        reviewed: Array.from(plan.reviewedSet||[]),
-        newed: Array.from(plan.newSet||[])
-      };
-      localStorage.setItem(TODAY_PLAN_KEY, JSON.stringify(obj));
-    }catch{}
+      const url = `${appCfg.SUPABASE_URL}/rest/v1/${SUPABASE_USERS_TABLE}?on_conflict=username`;
+      const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload) });
+      if (!resp.ok){
+        const txt = await resp.text().catch(()=> '');
+        console.warn('Supabase review upsert failed', resp.status, txt);
+      }
+    }catch(err){ console.warn('Supabase review upsert error', err); }
   }
+
+  function getReviewProgress(){
+    if (reviewState.date !== todayKey()){
+      reviewState.date = todayKey();
+      reviewState.reviewsDone = 0;
+      reviewState.reviewedWords = new Set();
+    }
+    const limit = (reviewState.reviewLimit != null && Number(reviewState.reviewLimit) > 0)
+      ? Number(reviewState.reviewLimit)
+      : null;
+    const remaining = (limit != null) ? Math.max(0, limit - reviewState.reviewsDone) : Number.POSITIVE_INFINITY;
+    return { reviewsDone: reviewState.reviewsDone, reviewLimit: limit, remaining };
+  }
+
   function initDailyPlanUI(){
-    // Seed inputs from localStorage or defaults
-    const n = parseInt(localStorage.getItem(DAILY_NEW_LIMIT_KEY),10);
-    const newLimit = isNaN(n) ? DEFAULT_DAILY_NEW_LIMIT : n;
-    if (inpDailyNewLimit){ inpDailyNewLimit.value = String(newLimit); }
-    const r = parseInt(localStorage.getItem(DAILY_REVIEW_LIMIT_KEY),10);
-    if (inpDailyReviewLimit){ inpDailyReviewLimit.value = String(isNaN(r)?0:r); }
-    if (planNewTargetEl){ planNewTargetEl.textContent = String(newLimit); }
-    if (planNewTarget2El){ planNewTarget2El.textContent = String(newLimit); }
-    inpDailyNewLimit?.addEventListener('change', ()=>{
-      const v = Math.max(0, Math.min(200, parseInt(inpDailyNewLimit.value,10)||0));
-      inpDailyNewLimit.value = String(v);
-      try{ localStorage.setItem(DAILY_NEW_LIMIT_KEY, String(v)); }catch{}
-      if (planNewTargetEl) planNewTargetEl.textContent = String(v);
-      if (planNewTarget2El) planNewTarget2El.textContent = String(v);
-      // rebuild queue and rerender plan
-      try{ buildSRSQueue(); renderDailyPlan(); }catch{}
-    });
+    if (inpDailyReviewLimit){
+      const limit = (reviewState.reviewLimit != null && Number(reviewState.reviewLimit) > 0) ? Number(reviewState.reviewLimit) : 0;
+      inpDailyReviewLimit.value = String(limit);
+    }
     inpDailyReviewLimit?.addEventListener('change', ()=>{
       const v = Math.max(0, Math.min(1000, parseInt(inpDailyReviewLimit.value,10)||0));
       inpDailyReviewLimit.value = String(v);
-      try{ localStorage.setItem(DAILY_REVIEW_LIMIT_KEY, String(v)); }catch{}
+      reviewState.reviewLimit = v > 0 ? v : null;
+      persistReviewState().catch(()=>{});
       try{ buildSRSQueue(); renderDailyPlan(); }catch{}
     });
   }
+
   function computeTodayTotals(){
     const now = Date.now();
-    const plan = loadTodayPlan();
-    // Totals
-    const dueTotal = (Array.isArray(dataset)?dataset:[]).filter(it => {
+    const { reviewsDone, reviewLimit, remaining } = getReviewProgress();
+    const duePending = (Array.isArray(dataset)?dataset:[]).filter(it => {
       const due = Number(it.due)||0; const reps = Number(it.reps)||0;
-      // Treat due if scheduled and due time passed; brand new (reps==0 and no due) are not in dueTotal
       return reps > 0 && due && due <= now;
     }).length;
-    const dailyNewTarget = parseInt(localStorage.getItem(DAILY_NEW_LIMIT_KEY),10);
-    const newTarget = isNaN(dailyNewTarget) ? DEFAULT_DAILY_NEW_LIMIT : dailyNewTarget;
-    // Left counts (avoid negative)
-    const reviewsDone = plan.reviewedSet ? plan.reviewedSet.size : Number(plan.reviewsDone||0);
-    const reviewsLeft = Math.max(0, dueTotal - reviewsDone);
-    const newsDone = plan.newSet ? plan.newSet.size : Number(plan.newsDone||0);
-    const newsLeft = Math.max(0, newTarget - newsDone);
-    return { plan, dueTotal, newTarget, reviewsDone, reviewsLeft, newsDone, newsLeft };
+    const reviewsLeft = Math.max(0, Math.min(duePending, remaining));
+    const reviewsTotal = reviewsDone + reviewsLeft;
+    return { duePending, reviewsTotal, reviewsDone, reviewsLeft, reviewLimit };
   }
+
   function renderDailyPlan(){
     if (!planDueCountEl) return; // UI not on this page
-    const { dueTotal, newTarget, reviewsDone, reviewsLeft, newsDone, newsLeft } = computeTodayTotals();
-    const totalLeft = reviewsLeft + newsLeft;
-    planDueCountEl.textContent = String(dueTotal);
-    if (planNewTargetEl) planNewTargetEl.textContent = String(newTarget);
+    const { reviewsTotal, reviewsDone, reviewsLeft } = computeTodayTotals();
+    const totalLeft = reviewsLeft;
+    planDueCountEl.textContent = String(reviewsLeft);
     if (planTotalLeftEl) planTotalLeftEl.textContent = String(totalLeft);
     if (planReviewsDoneEl) planReviewsDoneEl.textContent = String(reviewsDone);
-    if (planReviewsTotalEl) planReviewsTotalEl.textContent = String(dueTotal);
-    if (planNewsDoneEl) planNewsDoneEl.textContent = String(newsDone);
-    if (planNewTarget2El) planNewTarget2El.textContent = String(newTarget);
-    // Bars
+    if (planReviewsTotalEl) planReviewsTotalEl.textContent = String(reviewsTotal);
     try{
-      const rPct = dueTotal>0 ? Math.min(100, Math.round(reviewsDone/dueTotal*100)) : 0;
-      const nPct = newTarget>0 ? Math.min(100, Math.round(newsDone/newTarget*100)) : 0;
+      const rPct = reviewsTotal>0 ? Math.min(100, Math.round(reviewsDone/reviewsTotal*100)) : 0;
       if (barReviews) barReviews.style.width = rPct + '%';
-      if (barNews) barNews.style.width = nPct + '%';
     }catch{}
   }
-  function tallyTodayForCurrent(){
+
+  async function tallyTodayForCurrent(){
     if (current == null || current < 0 || !dataset[current]) return;
     const item = dataset[current];
     const w = keyForWord(item.word);
-    const plan = loadTodayPlan();
-    // Practice tab only counts reviews (due items). New words are counted in Study tab when user selects “Học từ này”.
-    plan.reviewedSet.add(w); plan.reviewsDone = plan.reviewedSet.size;
-    saveTodayPlan(plan);
+    if (!w) return;
+    if (reviewState.reviewedWords.has(w)) return;
+    reviewState.reviewedWords.add(w);
+    reviewState.reviewsDone = reviewState.reviewedWords.size;
+    reviewState.date = todayKey();
     renderDailyPlan();
+    persistReviewState().catch(()=>{});
   }
 })();

@@ -45,6 +45,10 @@ Sử dụng REST API của Supabase (PostgREST) với khóa anon. Các bảng m�
   - last_active timestamptz         # tuỳ chọn: lần hoạt động gần nhất
   - new_words_today integer         # Số từ mới người dùng đã bắt đầu trong ngày (đếm khi bấm "Học từ này")
   - new_words_date date             # Ngày tương ứng (YYYY-MM-DD) của bộ đếm `new_words_today`
+  - reviews_today integer           # Số thẻ đã ôn trong ngày (đồng bộ với tab Luyện tập)
+  - reviews_date date               # Ngày tương ứng (YYYY-MM-DD) cho `reviews_today`
+  - reviewed_words_today jsonb      # Danh sách từ đã ôn hôm nay (mảng chuỗi, tránh trùng lặp)
+  - daily_review_limit integer      # Giới hạn ôn/ngày do người dùng cài đặt (0 hoặc NULL = không giới hạn)
 
 - feedback
   - id uuid default gen_random_uuid() primary key
@@ -95,6 +99,11 @@ create table if not exists public.users (
   -- Theo dõi số từ mới/ngày (được cập nhật khi người dùng bấm "Học từ này")
   new_words_today integer NOT NULL DEFAULT 0,
   new_words_date date,
+  -- Theo dõi chỉ tiêu ôn lại trong ngày (đồng bộ với index.html)
+  reviews_today integer NOT NULL DEFAULT 0,
+  reviews_date date,
+  reviewed_words_today jsonb,
+  daily_review_limit integer,
   primary key (username)
 );
 
@@ -125,6 +134,7 @@ create policy anon_insert_feedback on public.feedback for insert with check (tru
 
 create policy anon_read_users on public.users for select using (true);
 create policy anon_upsert_users on public.users for insert with check (true);
+create policy anon_update_users on public.users for update using (true) with check (true);
 ```
 
 Lưu ý: Tùy nhu cầu bảo mật, bạn có thể siết RLS và dùng Auth — ví dụ ràng buộc theo `auth.uid()` thay cho public anon.

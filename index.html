@@ -37,7 +37,6 @@
       <div class="actions">
         <button id="btnShuffle" class="btn">Trộn câu hỏi</button>
         
-        <button id="btnResetProgress" class="btn outline" title="Xoá tiến độ học (thống kê & lặp lại)">Reset tiến độ</button>
         <label class="toggle"><input type="checkbox" id="toggleTTS" checked> Tự động đọc</label>
         <label class="toggle"><input type="checkbox" id="toggleTrans" checked> Hiện dịch</label>
       </div>
@@ -58,20 +57,16 @@
         <div class="plan-summary">
           <strong>Kế hoạch hôm nay:</strong>
           <span>Ôn lại đến hạn: <span id="planDueCount">0</span></span>
-          <span>• Từ mới mục tiêu: <span id="planNewTarget">20</span></span>
           <span>• Còn lại: <span id="planTotalLeft">0</span></span>
         </div>
         <div class="plan-controls">
-          <label class="inline"><span>Từ mới/ngày</span> <input id="inpDailyNewLimit" type="number" min="0" max="200" value="20"></label>
           <label class="inline"><span>Giới hạn ôn/ngày</span> <input id="inpDailyReviewLimit" type="number" min="0" max="1000" value="0"></label>
         </div>
       </div>
       <div class="plan-progress">
         <div class="bar"><div id="barReviews" class="bar-fill reviews" style="width:0%"></div></div>
-        <div class="bar"><div id="barNews" class="bar-fill news" style="width:0%"></div></div>
         <div class="plan-legend">
           <span class="dot reviews"></span> Ôn lại: <span id="planReviewsDone">0</span>/<span id="planReviewsTotal">0</span>
-          <span class="dot news"></span> Từ mới: <span id="planNewsDone">0</span>/<span id="planNewTarget2">20</span>
         </div>
       </div>
     </section>
