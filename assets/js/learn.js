@@ -1041,8 +1041,8 @@
     try{
       const x = JSON.parse(localStorage.getItem(TODAY_PLAN_KEY)||'null');
       if (x && x.date === today){
-        x.reviewedSet = new Set(Array.isArray(x.reviewed)||[]);
-        x.newSet = new Set(Array.isArray(x.newed)||[]);
+        x.reviewedSet = new Set(Array.isArray(x.reviewed) ? x.reviewed : []);
+        x.newSet = new Set(Array.isArray(x.newed) ? x.newed : []);
         return x;
       }
     }catch{}
