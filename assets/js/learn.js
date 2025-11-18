@@ -30,6 +30,7 @@
   const btnReplayTTS = document.getElementById('btnReplayTTS');
   const btnTransReadSentence = document.getElementById('btnTransReadSentence');
   const questionPos = document.getElementById('questionPos');
+  const questionLevel = document.getElementById('questionLevel');
   // Daily plan DOM
   const planDueCountEl = document.getElementById('planDueCount');
   const planTotalLeftEl = document.getElementById('planTotalLeft');
@@ -68,8 +69,7 @@
   const DAILY_REVIEW_LIMIT_KEY = 'fs_srs_daily_review_limit';
   let mustTypeCorrect = false; // require user to type correct answer after a wrong submission
   let correctionWord = '';
-  // Streak storage
-  const STREAK_KEY = 'fs_streak';
+  // Streak storage: persist in Supabase users table (no localStorage)
 
   function loadProgress(){ /* no-op: progress starts empty each session */ progress = {}; }
   function saveProgress(){ /* no-op: persistence removed */ }
@@ -85,7 +85,7 @@
     statWrong.textContent = String(wrongCount);
   }
 
-  // --- Streak helpers ---
+  // --- Streak helpers (Supabase-backed) ---
   function todayKey(){
     const d = new Date();
     const y = d.getFullYear();
@@ -93,38 +93,86 @@
     const day = String(d.getDate()).padStart(2,'0');
     return `${y}-${m}-${day}`;
   }
-  function loadStreak(){
+  function isoToLocalDay(iso){
+    if (!iso) return '';
     try{
-      const s = JSON.parse(localStorage.getItem(STREAK_KEY)||'null');
-      if (s && typeof s === 'object') return s;
-    }catch{}
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const day = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    }catch{ return ''; }
+  }
+  async function loadStreak(){
+    const appCfg = (window.APP_CONFIG||{});
+    const SUPABASE_ENABLED = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL && appCfg.SUPABASE_ANON_KEY;
+    const username = (typeof loadUser === 'function') ? (loadUser() || '') : '';
+    if (!SUPABASE_ENABLED || !username) return { count: 0, best: 0, lastDay: '' };
+    try{
+      const headers = {
+        'apikey': appCfg.SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${appCfg.SUPABASE_ANON_KEY}`,
+        'Accept': 'application/json'
+      };
+      const table = appCfg.SUPABASE_USERS_TABLE || 'users';
+      const select = 'streak_count,best_streak,last_active';
+      const url = `${appCfg.SUPABASE_URL}/rest/v1/${table}?username=eq.${encodeURIComponent(username)}&select=${select}`;
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) throw new Error('Supabase streak fetch failed');
+      const rows = await resp.json();
+      if (Array.isArray(rows) && rows.length){
+        const row = rows[0] || {};
+        const count = Number(row.streak_count || 0) || 0;
+        const best = Number(row.best_streak || 0) || 0;
+        const lastDay = isoToLocalDay(row.last_active || '');
+        return { count, best, lastDay };
+      }
+    }catch(err){ console.warn('loadStreak supabase error', err); }
     return { count: 0, best: 0, lastDay: '' };
   }
-  function saveStreak(s){
-    try{ localStorage.setItem(STREAK_KEY, JSON.stringify(s)); }catch{}
+  async function saveStreak(s){
+    const appCfg = (window.APP_CONFIG||{});
+    const SUPABASE_ENABLED = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL && appCfg.SUPABASE_ANON_KEY;
+    const username = (typeof loadUser === 'function') ? (loadUser() || '') : '';
+    if (!SUPABASE_ENABLED || !username) return;
+    try{
+      const headers = {
+        'apikey': appCfg.SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${appCfg.SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      };
+      const table = appCfg.SUPABASE_USERS_TABLE || 'users';
+      const url = `${appCfg.SUPABASE_URL}/rest/v1/${table}?on_conflict=username`;
+      const nowIso = new Date().toISOString();
+      const payload = [{ username, streak_count: Number(s.count||0), best_streak: Number(s.best||0), last_active: nowIso }];
+      const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload) });
+      if (!resp.ok){
+        // Fallback to minimal to ensure user exists
+        await fetch(url, { method:'POST', headers, body: JSON.stringify([{ username }]) }).catch(()=>{});
+      }
+    }catch(err){ console.warn('saveStreak supabase error', err); }
   }
-  function updateStreakOnOpen(){
-    const s = loadStreak();
+  async function updateStreakOnOpen(){
+    const s = await loadStreak();
     const today = todayKey();
     if (s.lastDay === today){
       renderStreak(s); return;
     }
-    // compute if consecutive (yesterday)
     const prev = s.lastDay ? new Date(s.lastDay+'T00:00:00') : null;
     const now = new Date(today+'T00:00:00');
-    let inc = 1; // first day becomes 1
+    let inc = 1;
     if (prev){
       const diff = Math.round((now - prev) / 86400000);
-      if (diff === 1) inc = (s.count||0) + 1; // consecutive
-      else inc = 1; // reset streak
+      if (diff === 1) inc = (s.count||0) + 1; else inc = 1;
     }
     s.count = inc;
     if (!s.best || inc > s.best) s.best = inc;
     s.lastDay = today;
-    saveStreak(s);
+    await saveStreak(s);
     renderStreak(s, { pulse: true, celebrate: true });
-    // Sync streak to Supabase users table (best-effort)
-    try{ syncStreakToSupabase(s); }catch{}
   }
   function renderStreak(s, opts={}){
     try{
@@ -140,33 +188,7 @@
     }catch{}
   }
 
-  // Push streak to Supabase users table if available
-  async function syncStreakToSupabase(streak){
-    try{
-      const appCfg = (window.APP_CONFIG||{});
-      const isSB = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL && appCfg.SUPABASE_ANON_KEY;
-      if (!isSB) return;
-      const username = (typeof loadUser === 'function') ? (loadUser() || '') : '';
-      if (!username) return;
-      const table = appCfg.SUPABASE_USERS_TABLE || 'users';
-      const url = `${appCfg.SUPABASE_URL}/rest/v1/${table}?on_conflict=username`;
-      const headers = {
-        'apikey': appCfg.SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${appCfg.SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Prefer': 'resolution=merge-duplicates'
-      };
-      const nowIso = new Date().toISOString();
-      const ext = [{ username, streak_count: Number(streak.count||0), best_streak: Number(streak.best||0), last_active: nowIso }];
-      // Try extended payload first; if fails (columns missing), fallback to minimal to at least ensure user exists
-      const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(ext) });
-      if (!resp.ok){
-        const minimal = [{ username }];
-        await fetch(url, { method:'POST', headers, body: JSON.stringify(minimal) }).catch(()=>{});
-      }
-    }catch(err){ /* swallow network/schema errors */ }
-  }
+  // Removed syncStreakToSupabase: consolidated into saveStreak()
 
   // Helper: determine if an item is marked selected for practice
   function itemIsSelected(item){
@@ -223,6 +245,11 @@
     questionText.textContent = displayed;
   // show pos if available
   try{ const p = getPosLabel(item); if (questionPos){ questionPos.textContent = p; questionPos.hidden = !p; } }catch(e){}
+    // show SRS level (L1..L5+)
+    try{
+      const lvl = getSrsLevel(item);
+      if (questionLevel){ questionLevel.textContent = lvl ? (`Level: ${lvl}`) : ''; questionLevel.hidden = !lvl; }
+    }catch(e){}
     lastDef = displayed;
     qIndex.textContent = `${queue.indexOf(index)+1}/${queue.length}`;
 
@@ -476,14 +503,12 @@
   function buildSRSQueue(){
     if (!(window.SRS)) return [];
     const now = Date.now();
-    // Chỉ lấy thẻ đã học (reps > 0) và đến hạn (due <= bây giờ)
+    // Lấy các thẻ đến hạn (due <= bây giờ), bao gồm cả thẻ reps = 0 nếu đã có due
     const hasSelection = dataset.some(itemIsSelected);
     const practiceDataset = (hasSelection ? dataset.filter(d => itemIsSelected(d)) : dataset) || [];
-    // Only include due review cards: reps > 0 and due <= now.
+    // Chỉ lấy thẻ có due hợp lệ và đã đến hạn
     srsQueue = practiceDataset.filter(card => {
-      const reps = Number(card && card.reps) || 0;
       const dueTs = Number(card && card.due);
-      if (reps <= 0) return false; // exclude brand-new cards from practice queue
       if (!Number.isFinite(dueTs) || dueTs <= 0) return false;
       return dueTs <= now;
     });
@@ -572,6 +597,17 @@
     if (lower.length <= 4) return lower.endsWith('.') ? lower : (lower + '.');
     const first = tokens[0] || lower;
     return first.length <= 6 ? (first.endsWith('.') ? first : first + '.') : '';
+  }
+
+  // Map SRS reps to a simple level key used in the UI summary
+  function getSrsLevel(item){
+    if (!item) return '';
+    const reps = Number(item.reps || 0) || 0;
+    if (reps <= 0) return 'L1';
+    if (reps === 1) return 'L2';
+    if (reps === 2) return 'L3';
+    if (reps === 3) return 'L4';
+    return 'L5+';
   }
 
   function buildFilledSentence(item){
@@ -810,8 +846,8 @@
     try{ await refreshReviewState(); }catch{}
     try{ initDailyPlanUI(); }catch{}
     try{ renderDailyPlan(); }catch{}
-    // Update & render streak on app open
-    try{ updateStreakOnOpen(); }catch{}
+    // Update & render streak on app open (Supabase-backed)
+    try{ await updateStreakOnOpen(); }catch{}
     // Do not prompt for username here to avoid blocking page load on some browsers
     // Load toggles from localStorage
     try{
@@ -1175,8 +1211,8 @@
     const now = Date.now();
     const { reviewsDone, reviewLimit, remaining } = getReviewProgress();
     const duePending = (Array.isArray(dataset)?dataset:[]).filter(it => {
-      const due = Number(it.due)||0; const reps = Number(it.reps)||0;
-      return reps > 0 && due && due <= now;
+      const due = Number(it.due)||0;
+      return due && due <= now;
     }).length;
     const reviewsLeft = Math.max(0, Math.min(duePending, remaining));
     const reviewsTotal = reviewsDone + reviewsLeft;

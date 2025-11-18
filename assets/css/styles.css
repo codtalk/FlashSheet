@@ -120,6 +120,7 @@ body{
 .q-index{color:var(--muted)}
 .question-text{font-size:22px; line-height:1.5; margin:12px 0 16px}
 .question-pos{font-size:13px; color:var(--muted); margin-bottom:8px}
+.question-level{font-size:13px; color:var(--muted); margin-bottom:8px}
 .answer-area{display:grid; gap:10px}
 .answer-input{width:100%; padding:12px 14px; border-radius:14px; border:1px solid rgba(255,255,255,0.12); background:#101431; color:var(--text); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04)}
 .answer-input::placeholder{color:#8a93a5}
