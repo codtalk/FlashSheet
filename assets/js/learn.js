@@ -693,6 +693,13 @@
     const FIFTEEN_MIN = 15 * 60 * 1000;
     const hasSelection = dataset.some(itemIsSelected);
     return dataset.map((item, idx) => {
+      // Skip items whose next review is in the future (avoid premature leveling)
+      try{
+        const due = Number(item && item.due) || 0;
+        const reps = Number(item && item.reps) || 0;
+        // New items (reps<=0) are always allowed; reviewed items only when due reached
+        if (reps > 0 && due > 0 && due > now){ return 0; }
+      }catch{}
       // If user has explicitly selected some words, skip unselected ones
       if (hasSelection && !itemIsSelected(item)) return 0.0;
       const k = keyForWord(item.word);
@@ -711,6 +718,9 @@
   function pickNextIndex(){
     if (!dataset.length) return -1;
     const weights = computeWeights();
+    // If all weights are zero (e.g., nothing due), return -1 to trigger due-empty messaging
+    const sum = weights.reduce((a,b)=>a+b,0);
+    if (!isFinite(sum) || sum <= 0) return -1;
     const hasSelection = dataset.some(itemIsSelected);
     // If selection exists, only pick among selected indices
     if (hasSelection){
@@ -730,7 +740,7 @@
     }
     // Default: pick among all
     let total = weights.reduce((a,b)=>a+b,0);
-    if (!isFinite(total) || total <= 0) return Math.floor(Math.random()*dataset.length);
+    if (!isFinite(total) || total <= 0) return -1;
     let r = Math.random() * total;
     for (let i=0;i<weights.length;i++){
       if ((r -= weights[i]) <= 0) return i;
@@ -755,7 +765,10 @@
       } else if (duePending > 0){
         questionText.textContent = 'Bạn đã hoàn thành chỉ tiêu hôm nay. Các thẻ còn lại sẽ chuyển sang ngày mai.';
       } else {
-        questionText.textContent = 'Hôm nay bạn đã hoàn thành hết các thẻ cần ôn lại!';
+        // If pickNextIndex would produce an index (due items) show one; else show finished message
+        const idx = pickNextIndex();
+        if (idx >= 0){ current = idx; setQuestion(idx); return; }
+        questionText.textContent = 'Hôm nay bạn đã hoàn thành hết các thẻ đến hạn!';
       }
       qIndex.textContent = '0/0';
       if (btnNext) btnNext.disabled = true;
