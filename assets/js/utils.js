@@ -681,18 +681,23 @@ window.LE = {
 // --- Optional: Web Speech (Text-to-Speech) helpers ---
 (function(){
   const hasTTS = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+  const DEBUG_TTS = (()=>{ try{ return (localStorage.getItem('fs_debug_tts') === '1') || /(?:\?|&)debugTTS=1(?:&|$)/.test(window.location.search||''); }catch{ return false; } })();
+  const dbg = (...args)=>{ if (DEBUG_TTS){ try{ console.debug('[TTS]', ...args); }catch{} } };
   let voices = [];
   let ready = false;
   let voicesPromise = null;
   function loadVoices(){
     try{
       voices = window.speechSynthesis?.getVoices?.() || [];
+      dbg('loadVoices ->', voices && voices.length ? `${voices.length} voices` : 'no voices');
       ready = true;
     }catch{}
   }
   if (hasTTS){
     loadVoices();
-    window.speechSynthesis?.addEventListener?.('voiceschanged', loadVoices);
+    try{
+      window.speechSynthesis?.addEventListener?.('voiceschanged', ()=>{ dbg('voiceschanged event'); loadVoices(); });
+    }catch{}
   }
 
   function pickVoice(lang){
@@ -706,7 +711,9 @@ window.LE = {
     v = voices.find(v=> (v.lang||'').toLowerCase().startsWith(prefix));
     if (v) return v;
     // any default
-    return voices[0] || null;
+    const pick = voices[0] || null;
+    dbg('pickVoice fallback ->', pick ? (pick.lang||'unknown') : 'none');
+    return pick;
   }
 
   async function ensureVoices(timeoutMs=2500){
@@ -720,15 +727,17 @@ window.LE = {
           loadVoices();
           if (voices && voices.length){ finish(); return; }
         }catch{}
-        const onvc = ()=>{ try{ loadVoices(); }catch{} finish(); };
+        const onvc = ()=>{ dbg('ensureVoices voiceschanged -> finishing'); try{ loadVoices(); }catch{} finish(); };
         try{ window.speechSynthesis?.addEventListener?.('voiceschanged', onvc); }catch{}
         setTimeout(()=>{
           try{ window.speechSynthesis?.removeEventListener?.('voiceschanged', onvc); }catch{}
+          dbg('ensureVoices timeout', timeoutMs);
           finish();
         }, timeoutMs);
       });
     }
     try{ await voicesPromise; }catch{}
+    dbg('ensureVoices done, count=', voices ? voices.length : 0);
     return (voices && voices.length) ? true : false;
   }
 
@@ -736,6 +745,7 @@ window.LE = {
     try{
       // Safari sometimes needs resume() to actually output audio
       window.speechSynthesis?.resume?.();
+      dbg('resumeIfPaused called');
     }catch{}
   }
 
@@ -751,17 +761,19 @@ window.LE = {
       const v = pickVoice(lang); if (v) u.voice = v;
       let settled = false;
       const settle = (val)=>{ if (!settled){ settled=true; resolve(val); } };
-      u.onend = () => settle(true);
-      u.onerror = () => settle(false);
+      u.onend = () => { dbg('onend', { text: t.slice(0,40), lang, rate }); settle(true); };
+      u.onerror = (e) => { dbg('onerror', e && e.error ? e.error : e); settle(false); };
       // Cancel any ongoing utterances, then speak after a microtask to avoid race conditions in some browsers
       try{ window.speechSynthesis.cancel(); }catch{}
       try{
         setTimeout(() => {
           try{
             resumeIfPaused();
+            dbg('speak start', { text: t.slice(0,40), lang, rate });
             window.speechSynthesis.speak(u);
             // Fallback timeout: if no end/error after a while, consider failure
-            setTimeout(()=> settle(false), Math.max(1200, Math.min(4000, Math.ceil(t.length*80))));
+            const to = Math.max(1200, Math.min(4000, Math.ceil(t.length*80)));
+            setTimeout(()=>{ dbg('speak timeout', to); settle(false); }, to);
           }catch(e){ settle(false); }
         }, 0);
       }catch{ settle(false); }
@@ -808,17 +820,19 @@ window.LE = {
         const a = new Audio();
         a.crossOrigin = 'anonymous';
         a.src = url;
-        a.onended = ()=> resolve(true);
-        a.onerror = ()=> resolve(false);
+        a.onended = ()=> { dbg('audio onended'); resolve(true); };
+        a.onerror = (e)=> { dbg('audio onerror', e); resolve(false); };
         // Some browsers require user gesture; assume caller is in click handler.
         try{
+          dbg('audio play', { provider, url: (url||'').slice(0,80) + '...' });
           await a.play();
         }catch(err){
           // As a last resort, open the audio in a new tab/window to bypass autoplay/CORS UI blocks
           try{
             const win = window.open(url, '_blank', 'noopener');
-            if (win) { resolve(true); return; }
+            if (win) { dbg('audio fallback window.open success'); resolve(true); return; }
           }catch{}
+          dbg('audio play rejected', err);
           resolve(false);
         }
       }catch{ resolve(false); }
@@ -832,6 +846,7 @@ window.LE = {
       speak,
       chainSpeak,
       speakViaAudio,
+      setDebug: (flag)=>{ try{ localStorage.setItem('fs_debug_tts', flag ? '1':'0'); }catch{} }
     }
   });
 })();

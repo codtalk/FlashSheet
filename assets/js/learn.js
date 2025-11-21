@@ -321,7 +321,21 @@
   }
 
   function normalize(s){
-    return (s||'').toString().trim().toLowerCase();
+    try{
+      let t = (s||'').toString();
+      // Normalize Unicode width/compatibility
+      t = t.normalize ? t.normalize('NFKC') : t;
+      // Unify smart quotes to ASCII equivalents
+      // Single quotes: ’ ‘ ‛ ʼ ＇ → '
+      t = t.replace(/[\u2018\u2019\u201B\u02BC\u2032\uFF07]/g, "'");
+      // Double quotes: “ ” ‟ ″ ＂ → "
+      t = t.replace(/[\u201C\u201D\u201F\u2033\uFF02]/g, '"');
+      // Collapse internal whitespace
+      t = t.replace(/\s+/g, ' ').trim().toLowerCase();
+      return t;
+    }catch{
+      return (s||'').toString().trim().toLowerCase();
+    }
   }
 
   function submitText(value, index){
@@ -675,13 +689,28 @@
     // Render UI
     renderPostAnswer(item);
 
-    // Auto TTS if enabled and supported
-    const canSpeak = !!(window.LE && LE.tts && LE.tts.supported && LE.tts.supported());
+    // Auto TTS if enabled and supported, with fallback to audio-based TTS
+    const hasTTS = !!(window.LE && LE.tts);
+    const canSpeak = !!(hasTTS && LE.tts.supported && LE.tts.supported());
     if (btnReplayTTS){ btnReplayTTS.disabled = !canSpeak; }
-    if (canSpeak && toggleTTS?.checked && lastSpeakParts.length){
-      // Wait for SFX to finish (best-effort) then speak English only
+    if (hasTTS && toggleTTS?.checked && lastSpeakParts.length){
       try{ await lastSfxPromise; }catch{}
-      LE.tts.chainSpeak(lastSpeakParts);
+      let spokenAny = false;
+      try{
+        if (canSpeak){
+          for (const p of lastSpeakParts){
+            if (!p || !p.text) continue;
+            // eslint-disable-next-line no-await-in-loop
+            const okOne = await LE.tts.speak(p.text, p);
+            if (okOne) spokenAny = true;
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise(r=>setTimeout(r, 120));
+          }
+        }
+      }catch{}
+      if (!spokenAny && LE.tts.speakViaAudio){
+        try{ await LE.tts.speakViaAudio(lastSpeakParts[0].text, { lang:'en' }); }catch{}
+      }
     }
     if (postAnswer && (!postAnswer.hidden)){
       // nothing else
@@ -888,12 +917,25 @@
     });
     btnReplayTTS?.addEventListener('click', async ()=>{
       try{
-        if (!(LE && LE.tts && LE.tts.supported && LE.tts.supported())) return;
+        if (!(LE && LE.tts)) return;
         const item = (current >= 0 && dataset[current]) ? dataset[current] : null;
-        const word = (item && item.word) ? String(item.word).trim() : '';
+        let word = (item && item.word) ? String(item.word).trim() : '';
+        // Fallback to last spoken parts if current card is not active (e.g., daily cap message)
+        if (!word && Array.isArray(lastSpeakParts) && lastSpeakParts.length && lastSpeakParts[0] && lastSpeakParts[0].text){
+          word = String(lastSpeakParts[0].text || '').trim();
+        }
         if (!word) return;
         try{ await lastSfxPromise; }catch{}
-        LE.tts.chainSpeak([{ text: word, lang: 'en-US', rate: 0.95 }]);
+        let ok = false;
+        try{
+          if (LE.tts.supported && LE.tts.supported()){
+            ok = await LE.tts.speak(word, { lang:'en-US', rate: 0.95 });
+          }
+        }catch{}
+        // If Web Speech fails or not supported, try audio-based TTS as a fallback
+        if (!ok && LE.tts.speakViaAudio){
+          try{ await LE.tts.speakViaAudio(word, { lang: 'en' }); }catch{}
+        }
       }catch{}
     });
     btnTransReadSentence?.addEventListener('click', async ()=>{
@@ -1101,12 +1143,39 @@
   const appCfg = (window.APP_CONFIG || {});
   const SUPABASE_USERS_TABLE = appCfg.SUPABASE_USERS_TABLE || 'users';
   const SUPABASE_ENABLED = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL && appCfg.SUPABASE_ANON_KEY;
+  const DAILY_REVIEW_LOCAL_KEY = 'fs_daily_review_state_v1';
+  let REVIEW_SUPABASE_BLOCKED = false; // set true on 401/RLS to stop retry spam
   let reviewState = {
     date: todayKey(),
     reviewsDone: 0,
     reviewLimit: null,
     reviewedWords: new Set()
   };
+
+  function loadDailyReviewLocal(){
+    try{
+      const raw = JSON.parse(localStorage.getItem(DAILY_REVIEW_LOCAL_KEY)||'{}');
+      if (!raw || typeof raw !== 'object') return null;
+      const words = Array.isArray(raw.reviewedWords) ? raw.reviewedWords : [];
+      return {
+        date: String(raw.date||todayKey()),
+        reviewsDone: Number(raw.reviewsDone||0) || 0,
+        reviewLimit: (raw.reviewLimit!=null ? Number(raw.reviewLimit) : null),
+        reviewedWords: new Set(words.map(w=>keyForWord(w)))
+      };
+    }catch{ return null; }
+  }
+  function saveDailyReviewLocal(state){
+    try{
+      const out = {
+        date: state.date,
+        reviewsDone: Number(state.reviewsDone||0) || 0,
+        reviewLimit: (state.reviewLimit!=null ? Number(state.reviewLimit) : null),
+        reviewedWords: Array.from(state.reviewedWords||[])
+      };
+      localStorage.setItem(DAILY_REVIEW_LOCAL_KEY, JSON.stringify(out));
+    }catch{}
+  }
 
   function parseReviewedWords(raw){
     if (!raw) return [];
@@ -1125,7 +1194,11 @@
     const username = (typeof loadUser === 'function') ? (loadUser() || '') : '';
     reviewState.reviewedWords = new Set();
     reviewState.reviewsDone = 0;
-    if (!SUPABASE_ENABLED || !username) return reviewState;
+    if (!SUPABASE_ENABLED || !username || REVIEW_SUPABASE_BLOCKED){
+      const local = loadDailyReviewLocal();
+      if (local){ reviewState = local; }
+      return reviewState;
+    }
     const headers = {
       'apikey': appCfg.SUPABASE_ANON_KEY,
       'Authorization': `Bearer ${appCfg.SUPABASE_ANON_KEY}`,
@@ -1162,13 +1235,31 @@
       reviewState.reviewedWords = new Set();
       try{ await persistReviewState(); }catch{}
     }
+    // Also merge/fallback from local if available (take the higher progress for today)
+    try{
+      const local = loadDailyReviewLocal();
+      if (local && local.date === reviewState.date){
+        if (local.reviewsDone > reviewState.reviewsDone){
+          reviewState.reviewedWords = new Set(local.reviewedWords);
+          reviewState.reviewsDone = local.reviewsDone;
+        }
+        // Prefer explicit limit if server lacks one
+        if (reviewState.reviewLimit == null && local.reviewLimit != null){
+          reviewState.reviewLimit = local.reviewLimit;
+        }
+      }
+    }catch{}
     return reviewState;
   }
 
   async function persistReviewState(){
-    if (!SUPABASE_ENABLED) return;
+    // If Supabase disabled or blocked by RLS, persist locally
+    if (!SUPABASE_ENABLED || REVIEW_SUPABASE_BLOCKED){
+      saveDailyReviewLocal(reviewState);
+      return;
+    }
     const username = (typeof loadUser === 'function') ? (loadUser() || '') : '';
-    if (!username) return;
+    if (!username){ saveDailyReviewLocal(reviewState); return; }
     const headers = {
       'apikey': appCfg.SUPABASE_ANON_KEY,
       'Authorization': `Bearer ${appCfg.SUPABASE_ANON_KEY}`,
@@ -1189,8 +1280,21 @@
       if (!resp.ok){
         const txt = await resp.text().catch(()=> '');
         console.warn('Supabase review upsert failed', resp.status, txt);
+        // If RLS/401, stop retrying this session and fallback to local
+        if (resp.status === 401 || /row-level security|42501/i.test(txt)){
+          REVIEW_SUPABASE_BLOCKED = true;
+          saveDailyReviewLocal(reviewState);
+          return;
+        }
+      } else {
+        // Keep a local copy too for offline continuity
+        saveDailyReviewLocal(reviewState);
       }
-    }catch(err){ console.warn('Supabase review upsert error', err); }
+    }catch(err){
+      console.warn('Supabase review upsert error', err);
+      // Network or other error: fallback local
+      saveDailyReviewLocal(reviewState);
+    }
   }
 
   function getReviewProgress(){
