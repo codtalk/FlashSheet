@@ -39,10 +39,12 @@
   function sm2Schedule(card, quality){
     const now = Date.now();
     if (quality < 3){
-      card.reps = 0;
-      card.interval = 1; // after lapse review tomorrow
+      // Lapse: DO NOT reset reps to 0 (keep cumulative count for level progression)
+      // Apply a small ease penalty and schedule a short retry window.
       card.lapses = (card.lapses||0) + 1;
-      // Special immediate again delay
+      card.ease = Math.max(MIN_EASE, (card.ease||DEFAULT_EASE) - 0.2);
+      card.interval = 1; // review again tomorrow after the immediate retry window
+      // Immediate retry in a short period (Again delay)
       card.due = now + AGAIN_DELAY_MINUTES * 60 * 1000;
     } else {
       if (card.reps === 0) card.interval = 1;
