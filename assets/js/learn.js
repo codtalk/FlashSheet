@@ -122,10 +122,21 @@
       if (!resp.ok) throw new Error('Supabase streak fetch failed');
       const rows = await resp.json();
       if (Array.isArray(rows) && rows.length){
-        const row = rows[0] || {};
-        const count = Number(row.streak_count || 0) || 0;
-        const best = Number(row.best_streak || 0) || 0;
-        const lastDay = isoToLocalDay(row.last_active || '');
+        // If duplicate user rows exist (missing unique constraint), pick the most recent last_active
+        let row;
+        if (rows.length > 1) {
+          rows.sort((a,b) => {
+            const da = new Date(a.last_active || 0).getTime();
+            const db = new Date(b.last_active || 0).getTime();
+            return db - da; // newest first
+          });
+          row = rows.find(r => r && (r.streak_count != null || r.last_active)) || rows[0];
+        } else {
+          row = rows[0];
+        }
+        const count = Number(row?.streak_count || 0) || 0;
+        const best = Number(row?.best_streak || 0) || 0;
+        const lastDay = isoToLocalDay(row?.last_active || '');
         return { count, best, lastDay };
       }
     }catch(err){ console.warn('loadStreak supabase error', err); }
@@ -146,12 +157,25 @@
       };
       const table = appCfg.SUPABASE_USERS_TABLE || 'users';
       const url = `${appCfg.SUPABASE_URL}/rest/v1/${table}?on_conflict=username`;
+      const updateUrl = `${appCfg.SUPABASE_URL}/rest/v1/${table}?username=eq.${encodeURIComponent(username)}`;
       const nowIso = new Date().toISOString();
       const payload = [{ username, streak_count: Number(s.count||0), best_streak: Number(s.best||0), last_active: nowIso }];
-      const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload) });
-      if (!resp.ok){
-        // Fallback to minimal to ensure user exists
-        await fetch(url, { method:'POST', headers, body: JSON.stringify([{ username }]) }).catch(()=>{});
+      // First attempt a targeted update (prevents duplicate rows if unique constraint missing)
+      let updated = false;
+      try{
+        const patchResp = await fetch(updateUrl, { method:'PATCH', headers, body: JSON.stringify({
+          streak_count: Number(s.count||0),
+          best_streak: Number(s.best||0),
+          last_active: nowIso
+        }) });
+        if (patchResp.ok) updated = true;
+      }catch{}
+      if (!updated){
+        const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload) });
+        if (!resp.ok){
+          // Fallback to minimal to ensure user exists
+          await fetch(url, { method:'POST', headers, body: JSON.stringify([{ username }]) }).catch(()=>{});
+        }
       }
     }catch(err){ console.warn('saveStreak supabase error', err); }
   }

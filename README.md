@@ -38,17 +38,17 @@ Sử dụng REST API của Supabase (PostgREST) với khóa anon. Các bảng m�
   - primary key (user, word)
 
 - users
-  - username text primary key
-  - created_at timestamptz default now()
-  - streak_count integer            # tuỳ chọn: chuỗi ngày hiện tại
-  - best_streak integer             # tuỳ chọn: kỷ lục chuỗi ngày
-  - last_active timestamptz         # tuỳ chọn: lần hoạt động gần nhất
-  - new_words_today integer         # Số từ mới người dùng đã bắt đầu trong ngày (đếm khi bấm "Học từ này")
-  - new_words_date date             # Ngày tương ứng (YYYY-MM-DD) của bộ đếm `new_words_today`
-  - reviews_today integer           # Số thẻ đã ôn trong ngày (đồng bộ với tab Luyện tập)
-  - reviews_date date               # Ngày tương ứng (YYYY-MM-DD) cho `reviews_today`
-  - reviewed_words_today jsonb      # Danh sách từ đã ôn hôm nay (mảng chuỗi, tránh trùng lặp)
-  - daily_review_limit integer      # Giới hạn ôn/ngày do người dùng cài đặt (0 hoặc NULL = không giới hạn)
+  - username text primary key (unique)
+  - created_at timestamptz NOT NULL DEFAULT now()
+  - streak_count integer NOT NULL DEFAULT 0    # chuỗi ngày liên tiếp hiện tại
+  - best_streak integer NOT NULL DEFAULT 0     # kỷ lục chuỗi ngày
+  - last_active timestamptz                    # lần hoạt động gần nhất (cập nhật khi mở app)
+  - new_words_today integer NOT NULL DEFAULT 0 # số từ mới đã bắt đầu hôm nay
+  - new_words_date date                        # ngày tương ứng với bộ đếm từ mới
+  - reviews_today integer NOT NULL DEFAULT 0   # số lượt ôn hôm nay
+  - reviews_date date                          # ngày tương ứng bộ đếm ôn
+  - reviewed_words_today jsonb                 # mảng từ đã ôn hôm nay
+  - daily_review_limit integer                 # giới hạn ôn/ngày (NULL hoặc 0 = không giới hạn)
 
 - feedback
   - id uuid default gen_random_uuid() primary key
@@ -90,22 +90,27 @@ create table if not exists public.srs_user (
 );
 
 create table if not exists public.users (
-  username text not null,
-  created_at timestamptz default now(),
-  -- Các cột tuỳ chọn cho streak (nếu muốn đồng bộ)
-  streak_count integer,
-  best_streak integer,
+  username text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  streak_count integer NOT NULL DEFAULT 0,
+  best_streak integer NOT NULL DEFAULT 0,
   last_active timestamptz,
-  -- Theo dõi số từ mới/ngày (được cập nhật khi người dùng bấm "Học từ này")
   new_words_today integer NOT NULL DEFAULT 0,
   new_words_date date,
-  -- Theo dõi chỉ tiêu ôn lại trong ngày (đồng bộ với index.html)
   reviews_today integer NOT NULL DEFAULT 0,
   reviews_date date,
   reviewed_words_today jsonb,
   daily_review_limit integer,
-  primary key (username)
+  constraint users_pkey primary key (username),
+  constraint users_username_key unique (username)
 );
+
+-- Nếu nâng cấp từ phiên bản cũ (các cột streak có thể NULL) chạy:
+-- ALTER TABLE public.users ALTER COLUMN streak_count SET DEFAULT 0;
+-- ALTER TABLE public.users ALTER COLUMN streak_count SET NOT NULL;
+-- ALTER TABLE public.users ALTER COLUMN best_streak SET DEFAULT 0;
+-- ALTER TABLE public.users ALTER COLUMN best_streak SET NOT NULL;
+-- ALTER TABLE public.users ADD CONSTRAINT users_username_key UNIQUE (username); -- nếu chưa có
 
 create table if not exists public.feedback (
   id uuid primary key default gen_random_uuid(),
