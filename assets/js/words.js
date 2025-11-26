@@ -68,7 +68,7 @@
     table.innerHTML = '';
     words.forEach(card => {
       const tr = document.createElement('tr');
-      const dueVal = Number(card.due || card.due_at || card.dueAt || 0) || 0;
+      const dueVal = Number(card.due || 0) || 0;
       // Determine status
       let status = '';
       // Consider a word NEW only if there is no SRS info (no due and no reps field)

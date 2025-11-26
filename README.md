@@ -177,5 +177,45 @@ python3 -m http.server 8000
 - Toàn bộ UI và mã liên quan Sheet đã được xoá khỏi `admin.html`, `index.html`, và JS.
 - Nếu thư mục `apps_script/` còn tồn tại trong repo của bạn, có thể xoá thủ công vì không còn dùng.
 
+## Supabase Policies cập nhật (sửa lỗi RLS khi upsert users)
+Nếu gặp lỗi: `new row violates row-level security policy (USING expression) for table "users"` khi gọi `POST /rest/v1/users?on_conflict=username` thì cần:
+
+1. Đảm bảo cột `username` có unique index.
+2. Bật RLS cho bảng `users` (và các bảng khác nếu chưa bật).
+3. Tạo chính sách cho phép anon đọc / insert / update (vì app dùng anon key làm JWT). Sau này có thể siết lại dùng Supabase Auth.
+
+SQL nhanh (chạy trong SQL Editor Supabase):
+
+```sql
+-- Unique index (nếu chưa có)
+create unique index if not exists users_username_key on public.users (username);
+
+-- Bật RLS (nếu chưa bật)
+alter table public.users enable row level security;
+
+-- Xoá policy cũ (nếu có) để tránh trùng tên
+drop policy if exists anon_read_users on public.users;
+drop policy if exists anon_upsert_users on public.users;
+drop policy if exists anon_update_users on public.users;
+
+-- Chính sách mở cho anon (tối thiểu để app hoạt động)
+create policy anon_read_users on public.users for select using (true);
+create policy anon_upsert_users on public.users for insert with check (true);
+create policy anon_update_users on public.users for update using (true) with check (true);
+
+-- (Tuỳ chọn) Nếu muốn reset về public cho bảng khác
+-- alter table public.words_shared enable row level security;
+-- alter table public.srs_user enable row level security;
+-- alter table public.feedback enable row level security;
+```
+
+Nếu muốn bảo mật hơn:
+- Bật Supabase Auth, thêm cột `id uuid default auth.uid()` rồi dùng `auth.uid() = id` trong USING/WITH CHECK.
+- Thay vì gửi Bearer anon key, dùng access token của người dùng.
+
+Tối ưu hoá sau này:
+- Thêm `created_at` index nếu cần truy vấn theo thời gian.
+- Thêm trigger chuẩn hoá `username` (LOWER) để tránh trùng phân biệt hoa thường.
+
 ## Giấy phép
 MIT.

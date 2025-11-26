@@ -24,7 +24,7 @@
     if (!k) return null;
     if (!store[k]){
       store[k] = {
-        addedAt: Date.now(),
+        addedat: Date.now(),
         reps: 0,
         lapses: 0,
         ease: DEFAULT_EASE,
@@ -47,6 +47,11 @@
       // Immediate retry in a short period (Again delay)
       card.due = now + AGAIN_DELAY_MINUTES * 60 * 1000;
     } else {
+      console.log('Scheduling with quality', quality);
+      console.log("reps before", card.reps);
+      console.log("interval before", card.interval);
+      console.log("ease before", card.ease);
+      // Successful review
       if (card.reps === 0) card.interval = 1;
       else if (card.reps === 1) card.interval = 6;
       else card.interval = Math.max(1, Math.round(card.interval * card.ease));

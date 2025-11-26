@@ -80,6 +80,54 @@
     return progress[k];
   }
 
+  function parseTimestamp(value){
+    if (value == null || value === '') return null;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) ? ms : null;
+  }
+
+  function hydrateCardFromItem(card, item){
+    if (!card || !item) return card;
+    const addedTs = parseTimestamp(item.addedat);
+    if (addedTs != null) card.addedat = addedTs;
+    const lastTs = parseTimestamp(item.lastreview);
+    if (lastTs != null) card.lastReview = lastTs;
+    const due = parseTimestamp(item.due);
+    if (due != null) card.due = due;
+    const reps = Number(item.reps);
+    if (Number.isFinite(reps) && reps >= 0) card.reps = reps;
+    const lapses = Number(item.lapses);
+    if (Number.isFinite(lapses) && lapses >= 0) card.lapses = lapses;
+    const ease = Number(item.ease);
+    if (Number.isFinite(ease) && ease > 0) card.ease = ease;
+    const interval = Number(item.interval);
+    if (Number.isFinite(interval) && interval >= 0) card.interval = interval;
+    item.addedat = card.addedat;
+    item.lastreview = card.lastReview;
+    item.due = card.due;
+    item.reps = card.reps;
+    item.lapses = card.lapses;
+    item.ease = card.ease;
+    item.interval = card.interval;
+    return card;
+  }
+
+  function hydrateSrsStoreFromDataset(){
+    if (!window.SRS || !Array.isArray(dataset)) return;
+    if (!srsStore || typeof srsStore !== 'object') srsStore = {};
+    dataset.forEach(item => {
+      const word = item && item.word;
+      if (!word) return;
+      const card = SRS.ensureCard(srsStore, word);
+      hydrateCardFromItem(card, item);
+      const key = keyForWord(word);
+      if (key) srsStore[key] = card;
+    });
+  }
+
   function updateStats(){
     statCorrect.textContent = String(correctCount);
     statWrong.textContent = String(wrongCount);
@@ -479,6 +527,7 @@
     const wordKey = keyForWord(item.word);
     const card = SRS.ensureCard(srsStore, item.word);
     if (!card) return;
+    hydrateCardFromItem(card, item);
     // Heuristic for mapping result -> quality
     // If correct: boost quality depending on recent streak
     // If incorrect: schedule again or hard depending on whether it's first encounter
@@ -505,10 +554,11 @@
       try{
         item.reps = card.reps;
         item.due = card.due;
-        item.lastReview = card.lastReview;
+        item.lastreview = card.lastReview;
         item.interval = card.interval;
         item.ease = card.ease;
         item.lapses = card.lapses;
+        item.addedat = card.addedat;
       }catch{}
     }catch(e){ console.warn('SRS schedule failed', e); }
 
@@ -523,7 +573,7 @@
           word: item.word,
           meanings: (item.meanings || []),
           examples: (item.examples || []),
-          addedat: card.addedAt,
+          addedat: card.addedat,
           reps: card.reps,
           lapses: card.lapses,
           ease: card.ease,
@@ -1042,12 +1092,12 @@
         if (!key) return;
         const base = byWord.get(key) || { word: u.word, meanings: [], examples: [], pos: '' };
         // Normalize SRS fields: map flat-case to camel expected by SRS engine
-        const addedAt = (u.addedAt != null) ? u.addedAt : (u.added_at != null ? u.added_at : (u.addedat != null ? u.addedat : null));
-        const lastReview = (u.lastReview != null) ? u.lastReview : (u.last_review != null ? u.last_review : (u.lastreview != null ? u.lastreview : null));
+        const addedTs = u.addedat != null ? u.addedat : null;
+        const lastTs = u.lastreview != null ? u.lastreview : null;
         const row = Object.assign({}, base, {
           // Ensure canonical camel fields present for in-memory scheduling
-          addedAt: addedAt,
-          lastReview: lastReview,
+          addedat: addedTs,
+          lastreview: lastTs,
           reps: (u.reps != null ? Number(u.reps) : null),
           lapses: (u.lapses != null ? Number(u.lapses) : null),
           ease: (u.ease != null ? Number(u.ease) : null),
@@ -1070,6 +1120,7 @@
     // but still keep the full dataset to allow SRS and stats to work.
     // Load SRS progress
     try{ srsStore = (window.SRS && SRS.loadStore && SRS.loadStore()) || {}; }catch{ srsStore = {}; }
+    hydrateSrsStoreFromDataset();
     // Build SRS queue before first question so SRS takes priority
     buildSRSQueue();
     // Now shuffle and present the first question

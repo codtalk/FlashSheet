@@ -366,10 +366,10 @@
       // Ensure local SRS card exists (in-memory) so buildQueue won't treat it as 'news'
       try{ if (window.SRS && SRS.ensureCard) { SRS.ensureCard(srsStore, item.word); srs = srsStore[key]; } }catch(e){}
       // Ensure flat-case fields for backend
-      if (!srs.addedat && !srs.added_at && !srs.addedAt) srs.addedat = Date.now();
+      if (!srs.addedat) srs.addedat = Date.now();
   // If reps isn't set, set to 0 (first encounter). We'll rely on due to include it in today's practice.
   if (srs.reps === undefined || srs.reps === null) srs.reps = 0;
-      if (!srs.due && !srs.due_at && !srs.dueAt) srs.due = Date.now();
+      if (!srs.due) srs.due = Date.now();
   const row = Object.assign({ word: item.word, meanings: (item.meanings || []), examples: (item.examples || []) }, srs);
   // include per-user identifier field 'user' so backend record associates with this user
   try{ const username = (typeof loadUser === 'function') ? (loadUser() || '') : ''; if (username) row.user = username; }catch(e){}

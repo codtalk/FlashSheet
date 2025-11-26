@@ -80,7 +80,9 @@ async function loadDefaultDataset(){
         const meanings = toArray(row.meanings, row.meanings_text);
         const examples = toArray(row.examples, row.examples_text);
         const out = { word: row.word || '', meanings, examples };
-        ['pos','addedAt','reps','lapses','ease','interval','due','lastReview','selectedForStudy','selected'].forEach(k=>{ if (row[k] != null) out[k] = row[k]; });
+        ['pos','addedat','reps','lapses','ease','interval','due','lastreview','selectedForStudy','selected'].forEach(k=>{
+          if (row[k] != null) out[k] = row[k];
+        });
         return out;
       });
     }catch(e){ console.warn('Supabase loadDefaultDataset failed', e); return []; }
@@ -469,9 +471,9 @@ async function appendRowsToSheet(endpoint, rows){
         }
         // Prefer handling SRS writes first (avoid routing to words table when SRS fields present)
         const hasSrs = r && (
-          r.addedAt != null || r.added_at != null || r.addedat != null ||
+          r.addedat != null ||
           r.reps != null || r.lapses != null || r.ease != null || r.interval != null || r.due != null ||
-          r.lastReview != null || r.last_review != null || r.lastreview != null
+          r.lastreview != null
         );
         if (r && r.word && hasSrs){
           const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${srsTable}?on_conflict=user,word`;
@@ -488,64 +490,20 @@ async function appendRowsToSheet(endpoint, rows){
             }
             return null;
           };
-          const buildPayload = (style) => {
-            const baseUser = user || '';
-            const base = {
-              user: baseUser,
-              word: r.word,
-              addedAt: r.addedAt ?? r.added_at ?? r.addedat ?? null,
-              reps: r.reps ?? null,
-              lapses: r.lapses ?? null,
-              ease: r.ease ?? null,
-              interval: r.interval ?? null,
-              due: r.due ?? null,
-              lastReview: r.lastReview ?? r.last_review ?? r.lastreview ?? null
-            };
-            // Normalize numerics
-            base.addedAt = toNum(base.addedAt);
-            base.interval = toNum(base.interval);
-            base.due = toNum(base.due);
-            base.lastReview = toNum(base.lastReview);
-            if (style === 'snake'){
-              return [{
-                user: base.user,
-                word: base.word,
-                added_at: base.addedAt,
-                reps: base.reps,
-                lapses: base.lapses,
-                ease: base.ease,
-                interval: base.interval,
-                due: base.due,
-                last_review: base.lastReview
-              }];
-            }
-            if (style === 'flat'){
-              return [{
-                user: base.user,
-                word: base.word,
-                addedat: base.addedAt,
-                reps: base.reps,
-                lapses: base.lapses,
-                ease: base.ease,
-                interval: base.interval,
-                due: base.due,
-                lastreview: base.lastReview
-              }];
-            }
-            // default camel
-            return [base];
-          };
-          // Try styles in order to match DB schema: flat (addedat), snake_case, camelCase
-          let srsOk = false; let lastErr = null;
-          for (const style of ['flat','snake','camel']){
-            try{
-              const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(buildPayload(style)) });
-              if (resp.ok){ srsOk = true; break; }
-              lastErr = new Error(`HTTP ${resp.status}`);
-            }catch(e){ lastErr = e; }
-          }
-          if (!srsOk) throw (lastErr || new Error('srs upsert failed'));
-          if (srsOk){ out.push({ ok:true, type:'srs' }); }
+          const payload = [{
+            user: user || '',
+            word: r.word,
+            addedat: toNum(r.addedat ?? null),
+            reps: r.reps ?? null,
+            lapses: r.lapses ?? null,
+            ease: r.ease ?? null,
+            interval: toNum(r.interval ?? null),
+            due: toNum(r.due ?? null),
+            lastreview: toNum(r.lastreview ?? null)
+          }];
+          const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload) });
+          if (!resp.ok) throw new Error(`srs upsert failed (${resp.status})`);
+          out.push({ ok:true, type:'srs' });
           continue;
         }
         // Upsert word metadata (meanings/examples/pos) — do NOT store selection flags in shared table
