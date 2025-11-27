@@ -357,10 +357,9 @@ textarea.answer-input{min-height:96px; resize:vertical; line-height:1.4}
 .flip-card.fullscreen.is-flipped{ transform:translate(-50%, -50%) rotateY(180deg) }
 .modal-backdrop.fs-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.35); backdrop-filter:blur(2px); z-index:1099 }
 
-/* Inline translate button on hover */
-.trans-btn{position:absolute; right:8px; top:50%; transform:translateY(-50%); opacity:0; transition:opacity .12s ease; border:1px solid var(--border); background:var(--chip-bg); color:var(--text); border-radius:999px; padding:4px 8px; font-size:12px; cursor:pointer}
+/* Inline translate button - always visible (mobile friendly) */
+.trans-btn{position:absolute; right:8px; top:50%; transform:translateY(-50%); opacity:1; transition:opacity .12s ease; border:1px solid var(--border); background:var(--chip-bg); color:var(--text); border-radius:999px; padding:6px 10px; font-size:12px; cursor:pointer}
 .trans-btn:hover{filter:brightness(1.05)}
-.fc-defs li:hover .trans-btn, .fc-ex-list li:hover .trans-btn{opacity:1}
 .inline-trans{margin-top:4px; font-size:13px; color:var(--text)}
 .inline-trans .muted{color:var(--muted)}
 

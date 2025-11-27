@@ -511,6 +511,17 @@
   fcDefs?.addEventListener('click', handleTranslateClick);
   fcExplain?.addEventListener('click', handleTranslateClick);
 
+  // Prevent flip when clicking on text needing translation or translated output
+  function swallowFlip(e){
+    const t = e.target;
+    if (!t) return;
+    if (t.closest && (t.closest('.line-text') || t.closest('.trans-btn') || t.closest('.inline-trans'))){
+      e.stopPropagation();
+    }
+  }
+  fcDefs?.addEventListener('click', swallowFlip);
+  fcExplain?.addEventListener('click', swallowFlip);
+
   // touch swipe
   flipCard?.addEventListener('touchstart', (e)=>{
     if (!e.touches || e.touches.length !== 1) return;
