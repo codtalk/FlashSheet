@@ -269,7 +269,7 @@
     }catch(e){ console.warn('Exclude words by srs_user failed', e); }
     if (dataset.length === 0){
       // No data available — show helpful message
-      fcWord.textContent = 'Chưa có dữ liệu. Vui lòng thêm dữ liệu trong trang Nhập dữ liệu (admin.html).';
+      fcWord.textContent = 'Chưa có dữ liệu. Liên hệ thienpahm để get thêm từ!';
       fcDefs.innerHTML = '';
       fcMeaning.textContent = '';
       fcExplain.textContent = '';

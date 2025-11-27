@@ -441,6 +441,14 @@ textarea.answer-input{min-height:96px; resize:vertical; line-height:1.4}
 .word-table tbody tr:hover{ background:rgba(0,0,0,0.03) }
 .word-table tbody tr:last-child td{ border-bottom:none }
 
+/* Scroll wrapper for large tables (My Words) */
+.table-wrap{ max-height: 60vh; overflow:auto; border-radius:12px; box-shadow:0 4px 12px var(--shadow); }
+.table-wrap .word-table{ margin:0; }
+@media (max-width: 640px){
+  .table-wrap{ max-height: 68vh; }
+  .word-table thead th{ position: sticky; top:0; z-index: 1; }
+}
+
 /* ===== New Header (responsive) ===== */
 .site-header{ position:sticky; top:0; z-index:100; width:100%; background:var(--header-bg); backdrop-filter:saturate(1.2) blur(8px); border-bottom:1px solid var(--border); }
 .header-inner{ max-width:1200px; margin:0 auto; padding:10px 16px; display:flex; align-items:center; justify-content:space-between; min-height:56px }
@@ -454,6 +462,19 @@ textarea.answer-input{min-height:96px; resize:vertical; line-height:1.4}
 .nav-link .ico{ opacity:.9; font-size:14px }
 .nav-link:hover{ transform:translateY(-1px); filter:brightness(1.03) }
 .nav-link.is-active{ background:linear-gradient(135deg, var(--primary), var(--accent)); color:#fff; border-color:transparent; box-shadow:0 8px 20px var(--shadow) }
+
+/* Submenu (Support: Guide + Feedback) */
+.nav-list .has-submenu{ position:relative; }
+.nav-list .submenu-toggle{ cursor:pointer; }
+.nav-list .submenu{ position:absolute; top:100%; left:0; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:8px; margin-top:6px; list-style:none; display:none; flex-direction:column; gap:6px; min-width:180px; box-shadow:0 12px 28px var(--shadow); z-index:200; }
+.nav-list .has-submenu.open > .submenu{ display:flex; }
+.nav-list .submenu a{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px; text-decoration:none; color:var(--text); background:var(--surface); border:1px solid var(--border); box-shadow:0 1px 2px var(--shadow); font-size:14px; }
+.nav-list .submenu a:hover{ filter:brightness(1.05); }
+@media (max-width: 768px){ .nav-list .submenu{ position:static; box-shadow:none; border:none; padding:4px 0; margin:4px 0 0; } }
+
+/* Mobile drawer grouped support section */
+.drawer-group-label{ font-weight:600; font-size:13px; color:var(--muted); padding:2px 4px; display:inline-block; }
+.drawer-sub{ list-style:none; margin:4px 0 0 10px; padding:0; display:flex; flex-direction:column; gap:6px; }
 
 /* Hamburger */
 .menu-toggle{ display:none; position:relative; width:40px; height:40px; border-radius:12px; border:1px solid var(--border); background:var(--surface); cursor:pointer; box-shadow:0 1px 2px var(--shadow) }
