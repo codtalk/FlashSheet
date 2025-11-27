@@ -7,20 +7,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('learnEnglish.theme')||'');}catch{}</script>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231c1f44'/%3E%3Cpath d='M12 46c6-1 10-5 12-12 1-4 1-8 6-12 6-5 14-5 22-1' fill='none' stroke='%237c3aed' stroke-width='6' stroke-linecap='round'/%3E%3Ctext x='16' y='42' font-family='Inter, Arial' font-size='20' fill='%23e9d5ff' font-weight='800'%3EF%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="assets/css/styles.css" />
 </head>
 <body>
-  <header class="app-header">
-    <a class="brand" href="index.html" aria-label="Trang chủ">Cardcard</a>
-    <nav class="nav">
-      <a href="study.html" class="nav-btn" aria-current="page">Học từ</a>
-      <a href="index.html" class="nav-btn">Luyện tập</a>
-      <a href="admin.html" class="nav-btn">Nhập dữ liệu</a>
-      <a href="feedback.html" class="nav-btn">Góp ý</a>
-      <a href="guide.html" class="nav-btn secondary">Hướng dẫn</a>
-    </nav>
-  </header>
+  <div id="appHeader"></div>
 
   <main class="container">
     <section class="controls">
@@ -70,6 +62,8 @@
     <span>Tip: Lật thẻ để xem dịch và giải thích. Dùng Trước/Sau để xem thẻ khác.</span>
   </footer>
 
+  <script src="assets/js/header.js"></script>
+  <script src="assets/js/theme.js"></script>
   <script src="assets/js/config.js"></script>
   <script src="assets/js/utils.js"></script>
   <script src="assets/js/study.js"></script>

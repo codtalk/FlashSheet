@@ -1,36 +1,51 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Danh sách từ của tôi</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cardcard — Từ của tôi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('learnEnglish.theme')||'');}catch{}</script>
   <link rel="stylesheet" href="assets/css/styles.css">
-  <style>
-    .word-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    .word-table th, .word-table td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-    .word-table th { background: #f5f5f5; }
-  </style>
 </head>
 <body>
-  <h1>Toàn bộ từ của tôi</h1>
-  <div style="margin-top:12px;">
-    <button id="btnPracticeNews" class="btn">Practice new words now</button>
-    <span class="muted" style="margin-left:8px;">(Set due=now for new words so they appear in practice)</span>
-  </div>
-  <table class="word-table" id="wordTable">
-    <thead>
-      <tr>
-        <th>Từ</th>
-        <th>Ngày thêm vào học</th>
-        <th>Lần xem cuối</th>
-        <th>Next due</th>
-        <th>Trạng thái</th>
-        <th>Số lần ôn tập</th>
-      </tr>
-    </thead>
-    <tbody>
-      <!-- Dữ liệu sẽ được render bằng JS -->
-    </tbody>
-  </table>
+  <div id="appHeader"></div>
+
+  <main class="container">
+    <h1>Toàn bộ từ của tôi</h1>
+    <section class="controls">
+      <div class="actions">
+        <button id="btnPracticeNews" class="btn">Practice new words now</button>
+        <span class="muted">(Set due=now for new words so they appear in practice)</span>
+      </div>
+    </section>
+    <section>
+      <table class="word-table" id="wordTable">
+        <thead>
+          <tr>
+            <th>Từ</th>
+            <th>Ngày thêm vào học</th>
+            <th>Lần xem cuối</th>
+            <th>Next due</th>
+            <th>Trạng thái</th>
+            <th>Số lần ôn tập</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Dữ liệu sẽ được render bằng JS -->
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <span>Tip: Vào trang Luyện tập để ôn những từ sắp đến hạn.</span>
+  </footer>
+
+  <script src="assets/js/header.js"></script>
+  <script src="assets/js/theme.js"></script>
   <script src="assets/js/config.js"></script>
   <script src="assets/js/utils.js"></script>
   <script src="assets/js/words.js"></script>
