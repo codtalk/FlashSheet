@@ -124,48 +124,197 @@ function saveDatasetToLocal(dataset) {
 
 // User management: store current username (used to read/write per-user sheet)
 const USER_KEY = 'fs_current_user';
+let userPromptPromise = null;
 function loadUser(){
   try{ return localStorage.getItem(USER_KEY) || ''; }catch{return '';}
 }
 function saveUser(u){
   try{ if (u) localStorage.setItem(USER_KEY, String(u).trim()); }catch{}
 }
-// Prompt for user if none set; returns stored or newly set username (or empty string if cancelled)
-function ensureUserPrompt(defaultName){
-  const existing = loadUser();
-  if (existing) return existing;
+function bestEffortUpsertUser(uname){
   try{
-    const promptName = window.prompt('Nhập tên người dùng (username) để đồng bộ tiến độ học:', defaultName || '');
-    if (promptName && promptName.trim()){
-      const uname = promptName.trim();
-      saveUser(uname);
-      // Best-effort: upsert into Supabase users table
-      try{
-        if (DS_MODE === 'supabase' && APP_CFG.SUPABASE_URL && APP_CFG.SUPABASE_ANON_KEY){
-          const table = APP_CFG.SUPABASE_USERS_TABLE || 'users';
-          const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${table}?on_conflict=username`;
-          const headers = {
-            'apikey': APP_CFG.SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${APP_CFG.SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Prefer': 'resolution=merge-duplicates'
-          };
-          const nowIso = new Date().toISOString();
-          const ext = [{ username: uname, created_at: nowIso, streak_count: 0, best_streak: 0, last_active: nowIso }];
-          // Try extended columns first; fall back to minimal if columns don't exist
-          fetch(url, { method:'POST', headers, body: JSON.stringify(ext) })
-            .then(resp => { if (!resp.ok) throw new Error('ext upsert failed'); })
-            .catch(()=>{
-              const minimal = [{ username: uname, created_at: nowIso }];
-              fetch(url, { method:'POST', headers, body: JSON.stringify(minimal) }).catch(()=>{});
-            });
-        }
-      }catch{}
-      return uname;
+    if (DS_MODE === 'supabase' && APP_CFG.SUPABASE_URL && APP_CFG.SUPABASE_ANON_KEY){
+      const table = APP_CFG.SUPABASE_USERS_TABLE || 'users';
+      const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${table}?on_conflict=username`;
+      const headers = {
+        'apikey': APP_CFG.SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${APP_CFG.SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      };
+      const nowIso = new Date().toISOString();
+      const ext = [{ username: uname, created_at: nowIso, streak_count: 0, best_streak: 0, last_active: nowIso }];
+      fetch(url, { method:'POST', headers, body: JSON.stringify(ext) })
+        .then(resp => { if (!resp.ok) throw new Error('ext upsert failed'); })
+        .catch(()=>{
+          const minimal = [{ username: uname, created_at: nowIso }];
+          fetch(url, { method:'POST', headers, body: JSON.stringify(minimal) }).catch(()=>{});
+        });
     }
   }catch{}
-  return '';
+}
+// Prompt for user if none set; returns a Promise resolving to the username (empty string on failure)
+function ensureUserPrompt(defaultName){
+  const existing = loadUser();
+  if (existing) return Promise.resolve(existing);
+  if (userPromptPromise) return userPromptPromise;
+
+  userPromptPromise = new Promise((resolve) => {
+    try{
+      const body = document && document.body;
+      if (!body){ resolve(''); userPromptPromise = null; return; }
+      const container = document.createElement('div');
+      container.className = 'modal user-modal';
+      container.setAttribute('role','dialog');
+      container.setAttribute('aria-modal','true');
+      const titleId = 'userPromptTitle';
+      const descId = 'userPromptDesc';
+      container.setAttribute('aria-labelledby', titleId);
+      container.setAttribute('aria-describedby', descId);
+
+      const backdrop = document.createElement('div');
+      backdrop.className = 'modal-backdrop';
+
+      const dialog = document.createElement('div');
+      dialog.className = 'modal-dialog user-modal-dialog';
+
+      const header = document.createElement('div');
+      header.className = 'user-modal-header';
+
+      const emblem = document.createElement('div');
+      emblem.className = 'user-modal-emblem';
+      emblem.setAttribute('aria-hidden', 'true');
+      emblem.textContent = '🎓';
+
+      const title = document.createElement('h2');
+      title.id = titleId;
+      title.textContent = 'Chào mừng đến Cardcard';
+
+      const desc = document.createElement('p');
+      desc.id = descId;
+      desc.className = 'user-modal-desc';
+      desc.textContent = 'Đặt username riêng để đồng bộ và theo dõi tiến độ học của bạn.';
+
+      header.appendChild(emblem);
+      header.appendChild(title);
+      header.appendChild(desc);
+
+      const form = document.createElement('form');
+      form.className = 'user-modal-form';
+      form.noValidate = true;
+
+      const field = document.createElement('div');
+      field.className = 'user-modal-field';
+
+      const label = document.createElement('label');
+      label.setAttribute('for', 'userPromptInput');
+      label.textContent = 'Username';
+
+      const input = document.createElement('input');
+      input.id = 'userPromptInput';
+      input.type = 'text';
+      input.name = 'username';
+      input.className = 'answer-input user-modal-input';
+      input.placeholder = 'vd: thien.nguyen';
+      input.value = (defaultName || '').trim();
+      input.autocomplete = 'nickname';
+      input.required = true;
+      input.maxLength = 30;
+
+      const hint = document.createElement('small');
+      hint.className = 'user-modal-hint';
+      hint.textContent = 'Dùng 3-30 ký tự: chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.';
+
+      const error = document.createElement('div');
+      error.className = 'user-modal-error';
+      error.setAttribute('aria-live', 'polite');
+
+      const actions = document.createElement('div');
+      actions.className = 'user-modal-actions';
+
+      const submitBtn = document.createElement('button');
+      submitBtn.type = 'submit';
+      submitBtn.className = 'btn primary';
+      submitBtn.textContent = 'Lưu & tiếp tục';
+
+      actions.appendChild(submitBtn);
+      field.appendChild(label);
+      field.appendChild(input);
+      form.appendChild(field);
+      form.appendChild(hint);
+      form.appendChild(error);
+      form.appendChild(actions);
+
+      dialog.appendChild(header);
+      dialog.appendChild(form);
+      container.appendChild(backdrop);
+      container.appendChild(dialog);
+
+      const prevOverflow = body.style.overflow;
+      body.style.overflow = 'hidden';
+      body.appendChild(container);
+
+      const focusables = () => Array.from(dialog.querySelectorAll('input, button, [tabindex]:not([tabindex="-1"])'))
+        .filter(el => !el.disabled && el.offsetParent !== null);
+      const onKeyDown = (evt) => {
+        if (evt.key === 'Tab'){
+          const items = focusables();
+          if (!items.length) return;
+          const first = items[0];
+          const last = items[items.length - 1];
+          if (evt.shiftKey){
+            if (document.activeElement === first){ evt.preventDefault(); last.focus(); }
+          } else {
+            if (document.activeElement === last){ evt.preventDefault(); first.focus(); }
+          }
+        } else if (evt.key === 'Escape'){
+          evt.preventDefault();
+          input.focus();
+        }
+      };
+      document.addEventListener('keydown', onKeyDown, true);
+
+      backdrop.addEventListener('click', () => { input.focus(); });
+      input.addEventListener('input', () => { error.textContent = ''; });
+
+      const cleanup = (uname) => {
+        document.removeEventListener('keydown', onKeyDown, true);
+        if (container.parentNode) container.parentNode.removeChild(container);
+        body.style.overflow = prevOverflow;
+        userPromptPromise = null;
+        resolve(uname);
+      };
+
+      form.addEventListener('submit', (evt) => {
+        evt.preventDefault();
+        const raw = (input.value || '').trim();
+        const pattern = /^[A-Za-z0-9._-]{3,30}$/;
+        if (!raw){
+          error.textContent = 'Vui lòng nhập username.';
+          input.focus();
+          return;
+        }
+        if (!pattern.test(raw)){
+          error.textContent = 'Username chỉ bao gồm chữ, số, ".", "_" hoặc "-" (3-30 ký tự).';
+          input.focus();
+          return;
+        }
+        const uname = raw;
+        try{ saveUser(uname); }catch{}
+        bestEffortUpsertUser(uname);
+        cleanup(uname);
+      });
+
+      requestAnimationFrame(() => { try{ input.focus(); }catch{} });
+    }catch(e){
+      console.warn('ensureUserPrompt modal failed', e);
+      resolve('');
+      userPromptPromise = null;
+    }
+  });
+
+  return userPromptPromise;
 }
 
 function clearDatasetLocal() {

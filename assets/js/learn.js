@@ -957,7 +957,7 @@
 
   async function init(){
     // Ensure username exists on first visit and upsert to users table
-    try{ ensureUserPrompt(''); }catch{}
+    try{ await ensureUserPrompt(''); }catch{}
     loadProgress();
     try{ await refreshReviewState(); }catch{}
     try{ initDailyPlanUI(); }catch{}

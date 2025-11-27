@@ -53,7 +53,7 @@
     if (typeof loadUser === 'function') {
       username = loadUser();
       if (!username && typeof ensureUserPrompt === 'function') {
-        username = ensureUserPrompt('');
+        username = await ensureUserPrompt('');
       }
     }
     if (!username) {
@@ -109,7 +109,7 @@
         if (cfg.DATA_SOURCE !== 'supabase' || !cfg.SUPABASE_URL){ alert('Chỉ hỗ trợ Supabase hiện tại.'); btn.disabled=false; btn.textContent='Practice new words now'; return; }
         let username = '';
         if (typeof loadUser === 'function') username = loadUser() || '';
-        if (!username && typeof ensureUserPrompt === 'function') username = ensureUserPrompt('');
+        if (!username && typeof ensureUserPrompt === 'function') username = await ensureUserPrompt('');
         if (!username){ alert('Không có username.'); btn.disabled=false; btn.textContent='Practice new words now'; return; }
         const table = cfg.SUPABASE_SRS_TABLE || 'srs_user';
         const now = Date.now();

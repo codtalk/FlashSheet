@@ -256,7 +256,7 @@
 
   async function init(){
     // Ensure username exists
-    try{ ensureUserPrompt(''); }catch{}
+    try{ await ensureUserPrompt(''); }catch{}
     // Load shared dataset
     try{ dataset = await LE.loadDefaultDataset(); }
     catch(err){ dataset = []; console.warn('LE.loadDefaultDataset failed', err); }
