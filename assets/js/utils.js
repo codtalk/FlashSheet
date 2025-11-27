@@ -611,7 +611,7 @@ window.LE = {
   try{
     const isSupabase = (DS_MODE === 'supabase' && APP_CFG.SUPABASE_URL && APP_CFG.SUPABASE_ANON_KEY);
     if (!isSupabase){
-      console.info('[FlashSheet] Data source:', DS_MODE || 'sheet');
+      console.info('[Cardcard] Data source:', DS_MODE || 'sheet');
       return;
     }
     const wordsTable = APP_CFG.SUPABASE_WORDS_TABLE || 'words_shared';
@@ -625,13 +625,13 @@ window.LE = {
       .then(async resp => {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const sample = await resp.json().catch(()=>[]);
-        const msg = `[FlashSheet] Supabase connected (${wordsTable}). Sample: ${Array.isArray(sample) && sample.length ? sample[0].word : 'empty'}`;
+        const msg = `[Cardcard] Supabase connected (${wordsTable}). Sample: ${Array.isArray(sample) && sample.length ? sample[0].word : 'empty'}`;
         try{ localStorage.setItem('supabase_last_ping', JSON.stringify({ ok:true, at: Date.now(), sample })); }catch{}
         console.info(msg);
       })
       .catch(err => {
         try{ localStorage.setItem('supabase_last_ping', JSON.stringify({ ok:false, at: Date.now(), error: String(err) })); }catch{}
-        console.error('[FlashSheet] Supabase connection failed:', err);
+        console.error('[Cardcard] Supabase connection failed:', err);
       });
   }catch(e){ /* ignore */ }
 })();

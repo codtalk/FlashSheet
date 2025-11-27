@@ -1,9 +1,9 @@
-# FlashSheet — Learn English (Supabase Edition)
+# Cardcard — Learn English (Supabase Edition)
 
-Ứng dụng web đơn giản giúp học từ vựng tiếng Anh qua flashcard (HTML/CSS/JS thuần) — nay dùng Supabase làm nguồn dữ liệu duy nhất (không còn Google Sheet/App Script).
+Ứng dụng web đơn giản giúp học từ vựng tiếng Anh qua Cardcard (HTML/CSS/JS thuần) — nay dùng Supabase làm nguồn dữ liệu duy nhất (không còn Google Sheet/App Script).
 
 ## Tính năng chính
-- study.html — Học từ với flashcard (lật thẻ, ví dụ, POS, phát âm TTS)
+- study.html — Học từ với Cardcard (lật thẻ, ví dụ, POS, phát âm TTS)
 - index.html — Luyện tập (nhập đáp án, trắc nghiệm, trộn), SRS tự động sau mỗi câu trả lời, đếm đúng/sai, âm thanh phản hồi
 - admin.html — Nhập từ trực tiếp (lưu vào Supabase), dán nhanh TSV/CSV để nhập hàng loạt, cấu hình SRS (giới hạn mỗi ngày)
 - feedback.html — Xem góp ý từ bảng `feedback` trên Supabase
