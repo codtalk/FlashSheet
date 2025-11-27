@@ -13,7 +13,13 @@ window.APP_CONFIG = window.APP_CONFIG || {
   SUPABASE_WORDS_TABLE: 'words_shared',
   SUPABASE_SRS_TABLE: 'srs_user',
   SUPABASE_FEEDBACK_TABLE: 'feedback',
-  SUPABASE_USERS_TABLE: 'users'
+  SUPABASE_USERS_TABLE: 'users',
+  // DeepL: set your API key here to enable built-in translation
+  // Use Free keys with suffix ":fx"; we'll route to api-free.deepl.com automatically
+  DEEPL_API_KEY: '20beeb45-b316-42d9-898d-c852b8bbea9f:fx',
+  // Optional: override base endpoint (defaults chosen by key type)
+  // e.g. 'https://api-free.deepl.com' or 'https://api.deepl.com'
+  DEEPL_API_BASE: 'https://api-free.deepl.com'
 };
 
 // Helper getter for backwards compatibility

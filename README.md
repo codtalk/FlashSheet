@@ -153,6 +153,10 @@ Sửa `assets/js/config.js`:
 
 App sử dụng REST API trực tiếp, không phụ thuộc thư viện supabase-js.
 
+### Dịch câu bằng DeepL
+- Thêm `DEEPL_API_KEY` vào `assets/js/config.js`. Nếu là key Free (đuôi `:fx`), app tự dùng `api-free.deepl.com`.
+- Khuyến nghị: dùng một backend/proxy riêng (ví dụ Supabase Edge Functions, Cloudflare Workers) để che khóa và tránh CORS. Apps Script đã được loại bỏ khỏi dự án này.
+
 ## Chạy trên máy
 
 ```bash

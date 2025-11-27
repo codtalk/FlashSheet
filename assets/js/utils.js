@@ -1025,14 +1025,74 @@ window.LE = {
   });
 })();
 
-// --- Optional: Translation helper (via configurable Apps Script) ---
+// --- Optional: Translation helper (DeepL first, fallback to custom endpoint) ---
 (function(){
-  async function translate(text, sl='en', tl='vi'){
+  function normalizeLang(code, kind){
+    const raw = (code||'').toString().trim();
+    if (!raw) return kind === 'target' ? 'EN' : undefined;
+    const up = raw.toUpperCase();
+    // Map common aliases to DeepL language codes
+    const map = {
+      'EN-US':'EN-US', 'EN-GB':'EN-GB', 'EN':'EN', 'EN_US':'EN-US', 'EN_GB':'EN-GB',
+      'VI':'VI', 'VI-VN':'VI', 'VI_VN':'VI', // Vietnamese (supported on newer DeepL plans)
+      'ZH':'ZH', 'ZH-CN':'ZH', 'ZH_TW':'ZH', // DeepL uses 'ZH' for Simplified Chinese
+      'PT-BR':'PT-BR', 'PT-PT':'PT-PT', 'PT':'PT-PT',
+    };
+    if (map[up]) return map[up];
+    // Fallback: two-letter code
+    const two = up.split('-')[0];
+    return two || (kind === 'target' ? 'EN' : undefined);
+  }
+
+  function deeplEndpoint(appCfg){
+    try{
+      const base = (appCfg && appCfg.DEEPL_API_BASE) || '';
+      if (base) return base.replace(/\/?$/,'') + '/v2/translate';
+      const key = (appCfg && (appCfg.DEEPL_API_KEY || appCfg.DEEL)) || '';
+      // Heuristic: free keys often end with ":fx"
+      const isFree = /:fx$/i.test(key);
+      return (isFree ? 'https://api-free.deepl.com' : 'https://api.deepl.com') + '/v2/translate';
+    }catch{ return 'https://api.deepl.com/v2/translate'; }
+  }
+
+  async function tryDeepL(text, sl, tl){
+    const APP_CFG = (window && window.APP_CONFIG) ? window.APP_CONFIG : {};
+    const key = (APP_CFG && (APP_CFG.DEEPL_API_KEY || APP_CFG.DEEL)) || '';
+    const t = (text||'').toString().trim();
+    if (!key || !t) return '';
+
+    const url = deeplEndpoint(APP_CFG);
+    const params = new URLSearchParams();
+    params.append('text', t);
+    const tgt = normalizeLang(tl, 'target');
+    if (tgt) params.append('target_lang', tgt);
+    const src = normalizeLang(sl, 'source');
+    if (src) params.append('source_lang', src);
+    params.append('preserve_formatting', '1');
+    params.append('split_sentences', '1');
+
+    try{
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'DeepL-Auth-Key ' + key,
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+        },
+        body: params.toString()
+      });
+      if (!resp.ok) return '';
+      const data = await resp.json().catch(()=>null);
+      const txt = data && data.translations && data.translations[0] && data.translations[0].text;
+      return (typeof txt === 'string') ? txt : '';
+    }catch(e){ return ''; }
+  }
+
+  async function tryCustomEndpoint(text, sl, tl){
     const cfg = (window.LE && LE.loadSheetConfig && LE.loadSheetConfig()) || {};
     const url = cfg.translateUrl;
     const t = (text||'').toString().trim();
     if (!url || !t) return '';
-    const body = `text=${encodeURIComponent(t)}&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}`;
+    const body = `text=${encodeURIComponent(t)}&sl=${encodeURIComponent(sl||'')}&tl=${encodeURIComponent(tl||'')}`;
     try{
       const resp = await fetch(url, {
         method: 'POST',
@@ -1044,6 +1104,14 @@ window.LE = {
       if (data && typeof data.text === 'string') return data.text;
       return '';
     }catch(e){ return ''; }
+  }
+
+  async function translate(text, sl='en', tl='vi'){
+    // 1) Try DeepL if configured
+    const deep = await tryDeepL(text, sl, tl);
+    if (deep) return deep;
+    // 2) Fallback to custom endpoint (Apps Script or proxy)
+    return await tryCustomEndpoint(text, sl, tl);
   }
 
   window.LE = Object.assign({}, window.LE, { translate });
