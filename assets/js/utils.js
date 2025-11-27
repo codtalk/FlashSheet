@@ -1087,6 +1087,29 @@ window.LE = {
     }catch(e){ return ''; }
   }
 
+  // Cloudflare Workers DeepL proxy: JSON POST
+  async function tryCloudflareDeepl(text, sl, tl){
+    try{
+      const APP_CFG = (window && window.APP_CONFIG) ? window.APP_CONFIG : {};
+      const endpoint = (APP_CFG && APP_CFG.cloudflareWorkersDeeplEndpoint) || '';
+      const t = (text||'').toString().trim();
+      if (!endpoint || !t) return '';
+
+      const target_lang = normalizeLang(tl, 'target') || 'VI';
+      const source_lang = normalizeLang(sl, 'source') || 'EN';
+
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: t, target_lang, source_lang })
+      });
+      if (!resp.ok) return '';
+      const data = await resp.json().catch(()=>null);
+      const txt = data && data.translations && data.translations[0] && data.translations[0].text;
+      return (typeof txt === 'string') ? txt : '';
+    }catch(e){ return ''; }
+  }
+
   async function tryCustomEndpoint(text, sl, tl){
     const cfg = (window.LE && LE.loadSheetConfig && LE.loadSheetConfig()) || {};
     const url = cfg.translateUrl;
@@ -1107,10 +1130,13 @@ window.LE = {
   }
 
   async function translate(text, sl='en', tl='vi'){
-    // 1) Try DeepL if configured
+    // 1) Try Cloudflare Workers DeepL proxy if configured
+    const viaCf = await tryCloudflareDeepl(text, sl, tl);
+    if (viaCf) return viaCf;
+    // 2) Try direct DeepL API if key configured
     const deep = await tryDeepL(text, sl, tl);
     if (deep) return deep;
-    // 2) Fallback to custom endpoint (Apps Script or proxy)
+    // 3) Fallback to custom endpoint (Apps Script or other proxy)
     return await tryCustomEndpoint(text, sl, tl);
   }
 

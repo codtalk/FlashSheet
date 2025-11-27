@@ -223,3 +223,73 @@ Tối ưu hoá sau này:
 
 ## Giấy phép
 MIT.
+
+
+----
+code Cloudflare Workers 
+
+export default {
+  async fetch(request, env, ctx) {
+    const allowedOrigin = "https://cardcard.thienpahm.dev";
+
+    // Preflight (OPTIONS)
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": allowedOrigin,
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+      });
+    }
+
+    if (request.method !== "POST") {
+      return new Response("Method Not Allowed", { status: 405 });
+    }
+
+    try {
+      const body = await request.json();
+      const { text, target_lang, source_lang } = body;
+
+      const apiKey = env.DEEPL_API_KEY;
+      if (!apiKey) return new Response("Missing DEEPL_API_KEY", { status: 500 });
+
+      const params = new URLSearchParams();
+      params.append("text", text);
+      params.append("target_lang", target_lang || "EN");
+      if (source_lang) params.append("source_lang", source_lang);
+
+      const deepl = await fetch("https://api-free.deepl.com/v2/translate", {
+        method: "POST",
+        headers: {
+          "Authorization": `DeepL-Auth-Key ${apiKey}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params,
+      });
+
+      const textResponse = await deepl.text();
+
+      return new Response(textResponse, {
+        status: deepl.status,
+        headers: {
+          "Access-Control-Allow-Origin": allowedOrigin,
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (err) {
+      return new Response("Error: " + err.toString(), { status: 500 });
+    }
+  }
+};
+
+
+Settings → Variables → Environment Variables
+
+Nhấn Add variable:
+
+Name: DEEPL_API_KEY
+Value: DeepL-Auth-Key youractualkey
