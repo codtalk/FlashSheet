@@ -522,6 +522,10 @@
   fcDefs?.addEventListener('click', swallowFlip);
   fcExplain?.addEventListener('click', swallowFlip);
 
+  // Also prevent flip when starting a selection gesture inside text
+  fcDefs?.addEventListener('mousedown', swallowFlip);
+  fcExplain?.addEventListener('mousedown', swallowFlip);
+
   // touch swipe
   flipCard?.addEventListener('touchstart', (e)=>{
     if (!e.touches || e.touches.length !== 1) return;
