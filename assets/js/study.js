@@ -172,14 +172,27 @@
     // back: translation + explanation (2 example sentences if available)
     const trans = preferredTranslation(item);
     fcMeaning.innerHTML = trans ? `<div class="translation-row"><span class="muted">Dịch:</span> <strong>${trans}</strong></div>` : '';
+    // optional description field (English) needing translation button
+    let descRaw = '';
+    try{
+      const candKeys = ['description','desc','explain','mota','mo_ta','mo-ta','note'];
+      for (const k of candKeys){ if (k in item && item[k]){ descRaw = String(item[k]).trim(); if (descRaw) break; } }
+    }catch{}
     const examples = exampleSentences(item);
-    if (examples.length){
-      fcExplain.innerHTML = `
-        <div class="translation-row"><span class="muted">Ví dụ:</span></div>
-        <ul class="fc-ex-list">${examples.map(e => `<li><span class="line-text">${e}</span><button class="trans-btn" title="Dịch" aria-label="Dịch câu này">Dịch</button><div class="inline-trans" hidden></div></li>`).join('')}</ul>`;
-    } else {
-      fcExplain.innerHTML = '';
+    let explainHTML = '';
+    if (descRaw){
+      // show only if not already Vietnamese (nếu tiếng Anh thì thêm nút dịch)
+      const isVn = containsVietnamese(descRaw);
+      if (!isVn){
+        explainHTML += `<div class="translation-row"><span class="muted">Mô tả:</span></div><ul class="fc-desc-list"><li><span class="line-text">${descRaw}</span><button class="trans-btn" title="Dịch" aria-label="Dịch mô tả">Dịch</button><div class="inline-trans" hidden></div></li></ul>`;
+      } else {
+        explainHTML += `<div class="translation-row"><span class="muted">Mô tả:</span> <strong>${descRaw}</strong></div>`;
+      }
     }
+    if (examples.length){
+      explainHTML += `<div class="translation-row"><span class="muted">Ví dụ:</span></div><ul class="fc-ex-list">${examples.map(e => `<li><span class="line-text">${e}</span><button class="trans-btn" title="Dịch" aria-label="Dịch câu này">Dịch</button><div class="inline-trans" hidden></div></li>`).join('')}</ul>`;
+    }
+    fcExplain.innerHTML = explainHTML;
     updateIndex();
     // update select-for-practice button state
     try{
