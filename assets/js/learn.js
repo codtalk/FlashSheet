@@ -156,7 +156,17 @@
     const appCfg = (window.APP_CONFIG||{});
     const SUPABASE_ENABLED = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL && appCfg.SUPABASE_ANON_KEY;
     const username = (typeof loadUser === 'function') ? (loadUser() || '') : '';
-    if (!SUPABASE_ENABLED || !username) return { count: 0, best: 0, lastDay: '' };
+    // Local fallback when Supabase not configured or username missing
+    if (!SUPABASE_ENABLED || !username){
+      try{
+        const raw = localStorage.getItem('fs_user_streak') || '{}';
+        const obj = JSON.parse(raw || '{}') || {};
+        const count = Number(obj.count||0) || 0;
+        const best = Number(obj.best||0) || 0;
+        const lastDay = typeof obj.lastDay === 'string' ? obj.lastDay : '';
+        return { count, best, lastDay };
+      }catch{ return { count: 0, best: 0, lastDay: '' }; }
+    }
     try{
       const headers = {
         'apikey': appCfg.SUPABASE_ANON_KEY,
@@ -194,7 +204,16 @@
     const appCfg = (window.APP_CONFIG||{});
     const SUPABASE_ENABLED = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL && appCfg.SUPABASE_ANON_KEY;
     const username = (typeof loadUser === 'function') ? (loadUser() || '') : '';
-    if (!SUPABASE_ENABLED || !username) return;
+    // Local fallback when Supabase not configured or username missing
+    if (!SUPABASE_ENABLED || !username){
+      try{
+        const nowDay = todayKey();
+        const count = Number(s.count||0) || 0;
+        const best = Number(s.best||0) || 0;
+        localStorage.setItem('fs_user_streak', JSON.stringify({ count, best, lastDay: nowDay }));
+      }catch{}
+      return;
+    }
     try{
       const headers = {
         'apikey': appCfg.SUPABASE_ANON_KEY,
