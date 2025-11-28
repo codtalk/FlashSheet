@@ -293,3 +293,7 @@ Nhấn Add variable:
 
 Name: DEEPL_API_KEY
 Value: DeepL-Auth-Key youractualkey
+
+
+---
+https://www.deepl.com/en/your-account/keys

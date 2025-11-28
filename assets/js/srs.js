@@ -46,14 +46,21 @@
       card.interval = 1; // review again tomorrow after the immediate retry window
       // Immediate retry in a short period (Again delay)
       card.due = now + AGAIN_DELAY_MINUTES * 60 * 1000;
+    } else if (quality === 6) {
+      // Correct confirmation without leveling up: keep reps unchanged, schedule next day
+      // Slight ease improvement to reflect positive performance
+      card.interval = Math.max(1, card.interval || 1);
+      const efChange = 0.05;
+      card.ease = Math.max(MIN_EASE, (card.ease||DEFAULT_EASE) + efChange);
+      card.due = now + 1 * 86400000;
     } else {
       console.log('Scheduling with quality', quality);
       console.log("reps before", card.reps);
       console.log("interval before", card.interval);
       console.log("ease before", card.ease);
       // Successful review
-      if (card.reps === 0) card.interval = 1;
-      else if (card.reps === 1) card.interval = 6;
+      if (card.reps === 0) card.interval = 1; // first successful review: next day
+      else if (card.reps === 1) card.interval = 3; // second successful: shorter jump (was 6d)
       else card.interval = Math.max(1, Math.round(card.interval * card.ease));
       card.reps += 1;
       // quality mapping influences ease

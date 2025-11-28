@@ -50,6 +50,7 @@
   // Removed local persistence for progress: keep ephemeral in-memory only.
   const PROGRESS_KEY = 'fs_progress'; // legacy key (unused)
   let progress = {}; // { [wordKey]: { seen, correct, wrong, lastSeen, streak } } (in-memory)
+  const LEVEL_UP_CONFIRMATIONS = 2; // require N correct answers before increasing reps/level
   const FEEDBACK_BUF_KEY = 'fs_feedback_buffer';
   const FEEDBACK_USER_KEY = 'fs_feedback_user';
   let lastDef = '';
@@ -76,7 +77,7 @@
   function keyForWord(w){ return (w||'').toString().trim().toLowerCase(); }
   function touchProgress(word){
     const k = keyForWord(word);
-    if (!progress[k]) progress[k] = { seen:0, correct:0, wrong:0, lastSeen:0, streak:0 };
+    if (!progress[k]) progress[k] = { seen:0, correct:0, wrong:0, lastSeen:0, streak:0, confirms:0 };
     return progress[k];
   }
 
@@ -457,8 +458,8 @@
     const item = dataset[index];
     const p = touchProgress(item.word);
     p.seen += 1; p.lastSeen = Date.now();
-    if (ok) { p.correct += 1; p.streak = (p.streak||0) + 1; }
-    else { p.wrong += 1; p.streak = 0; }
+    if (ok) { p.correct += 1; p.streak = (p.streak||0) + 1; p.confirms = (p.confirms||0) + 1; }
+    else { p.wrong += 1; p.streak = 0; p.confirms = 0; }
     saveProgress();
 
     if (ok) {
@@ -553,10 +554,21 @@
     let quality = 4; // default Good
     try{
       const streak = (progressEntry && progressEntry.streak) ? progressEntry.streak : 0;
+      const confirms = Number(progressEntry?.confirms||0) || 0;
       if (ok){
-        if (streak >= 3) quality = 5; // Easy if long streak
-        else if (streak === 0) quality = 4; // first correct -> Good
-        else quality = 4; // modest boost
+        const allowLevelUp = confirms >= LEVEL_UP_CONFIRMATIONS;
+        if (!allowLevelUp){
+          // Correct answer but require more confirmations before leveling up.
+          // Use special quality 6 to schedule a success without incrementing reps.
+          quality = 6;
+        } else {
+          // Enough confirmations: allow normal level-up progression
+          if (streak >= 3) quality = 5; // Easy if long streak
+          else if (streak === 0) quality = 4; // first correct -> Good
+          else quality = 4; // modest boost
+          // Reset confirms after level-up permission
+          try{ progressEntry.confirms = 0; }catch{}
+        }
       } else {
         // incorrect
         const seen = (progressEntry && progressEntry.seen) ? progressEntry.seen : 0;
