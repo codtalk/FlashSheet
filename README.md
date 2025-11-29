@@ -5,221 +5,314 @@
 ## Tính năng chính
 - study.html — Học từ với Cardcard (lật thẻ, ví dụ, POS, phát âm TTS)
 - index.html — Luyện tập (nhập đáp án, trắc nghiệm, trộn), SRS tự động sau mỗi câu trả lời, đếm đúng/sai, âm thanh phản hồi
-- admin.html — Nhập từ trực tiếp (lưu vào Supabase), dán nhanh TSV/CSV để nhập hàng loạt, cấu hình SRS (giới hạn mỗi ngày)
-- feedback.html — Xem góp ý từ bảng `feedback` trên Supabase
+# Cardcard — Learn English
 
-## Kiến trúc dữ liệu (Supabase)
-Sử dụng REST API của Supabase (PostgREST) với khóa anon. Các bảng mặc định:
+README này mô tả đầy đủ cách khởi tạo cơ sở dữ liệu Postgres (Supabase) cho ứng dụng học từ vựng Cardcard, bao gồm: bảng, chỉ mục, RLS policies, grants, triggers gợi ý, và script idempotent. Mục tiêu: chạy một lần hoặc nhiều lần không gây lỗi, giúp nâng cấp schema an toàn.
 
-- words_shared
-  - word text primary key
-  - meanings_text text      # danh sách nghĩa (ngăn bởi ;)
-  - examples_text text      # ví dụ tiếng Anh (ngăn bởi ;)
-  - pos text                # nhãn loại từ ngắn (n., v., adj., ...)
-  - addedat bigint          # thời điểm thêm (epoch ms)
-  - reps integer            # số lần ôn
-  - lapses integer          # số lần quên
-  - ease real               # hệ số SM-2
-  - interval bigint         # khoảng cách (ngày)
-  - due bigint              # hạn ôn (epoch ms)
-  - lastreview bigint       # lần ôn cuối (epoch ms)
-  - selectedforstudy text   # tuỳ chọn, KHÔNG dùng trong app (app lọc theo srs_user theo từng user)
+## Mục tiêu hệ thống
+- Quản lý từ vựng chung (`words_shared`)
+- Theo dõi lịch ôn theo từng người dùng (`srs_user`)
+- Quản lý người dùng nhẹ (không Auth hoặc có thể mở rộng thành Auth) (`users`)
+- Thu thập góp ý trong ứng dụng (`feedback`)
 
-- srs_user
-  - user text
-  - word text
-  - addedat bigint
-  - reps integer
-  - lapses integer
-  - ease real
-  - interval bigint
-  - due bigint
-  - lastreview bigint
-  - primary key (user, word)
+## Kiến trúc tổng quan
+Front-end thuần HTML/CSS/JS, gọi trực tiếp REST API Supabase (PostgREST) với `anon` key. SRS dùng thuật toán SM‑2 rút gọn. Chưa dùng thư viện `@supabase/supabase-js` (có thể thêm sau).
 
-- users
-  - username text primary key (unique)
-  - created_at timestamptz NOT NULL DEFAULT now()
-  - streak_count integer NOT NULL DEFAULT 0    # chuỗi ngày liên tiếp hiện tại
-  - best_streak integer NOT NULL DEFAULT 0     # kỷ lục chuỗi ngày
-  - last_active timestamptz                    # lần hoạt động gần nhất (cập nhật khi mở app)
-  - new_words_today integer NOT NULL DEFAULT 0 # số từ mới đã bắt đầu hôm nay
-  - new_words_date date                        # ngày tương ứng với bộ đếm từ mới
-  - reviews_today integer NOT NULL DEFAULT 0   # số lượt ôn hôm nay
-  - reviews_date date                          # ngày tương ứng bộ đếm ôn
-  - reviewed_words_today jsonb                 # mảng từ đã ôn hôm nay
-  - daily_review_limit integer                 # giới hạn ôn/ngày (NULL hoặc 0 = không giới hạn)
+## Quy ước dữ liệu chính
+| Bảng | Mục đích | Khóa chính | Ghi chú |
+|------|---------|------------|--------|
+| words_shared | Kho từ vựng chung | word | Chứa metadata ôn cơ bản để seed hoặc dùng chung |
+| srs_user | Trạng thái ôn từng user | (user, word) | Dữ liệu động thay đổi theo đánh giá |
+| users | Hồ sơ nhẹ & streak | username | Có thể mở rộng thêm Auth sau |
+| feedback | Góp ý từ người dùng | id (uuid) | Lưu msg + ngữ cảnh |
 
-- feedback
-  - id uuid default gen_random_uuid() primary key
-  - message text
-  - ctx text
-  - user text
-  - created_at timestamptz default now()
-
-SQL tham khảo để khởi tạo nhanh (chỉnh schema nếu cần):
+## Script khởi tạo toàn bộ (Idempotent)
+Chạy toàn bộ trong Supabase SQL Editor. Supabase đã có các role nội bộ (`anon`, `authenticated`, `service_role`). Không cần tạo role mới, chỉ cần grants & policies.
 
 ```sql
-create table if not exists public.words_shared (
-  word text primary key,
-  meanings_text text,
-  examples_text text,
-  pos text,
-  addedat bigint,
-  reps integer,
-  lapses integer,
-  ease real,
-  interval bigint,
-  due bigint,
-  lastreview bigint,
-  selectedforstudy text
+-- =====================================================
+-- Cardcard FULL SCHEMA SETUP (Idempotent)
+-- =====================================================
+-- Khuyến nghị: chạy từng khối nếu bạn muốn kiểm tra.
+
+-- 0. Extensions (Supabase mặc định đã bật một số; kiểm tra trước)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;       -- gen_random_uuid()
+CREATE EXTENSION IF NOT EXISTS uuid-ossp;      -- uuid_generate_v4() (dự phòng)
+
+-- 1. Tables ------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.words_shared (
+  word              TEXT PRIMARY KEY,
+  meanings_text     TEXT,            -- nghĩa phân tách bằng ;
+  examples_text     TEXT,            -- ví dụ phân tách bằng ;
+  pos               TEXT,            -- loại từ (n., v., adj., ...)
+  addedat           BIGINT,          -- epoch ms
+  reps              INTEGER,
+  lapses            INTEGER,
+  ease              REAL,
+  interval          BIGINT,          -- ngày (hoặc ms tuỳ bạn)
+  due               BIGINT,          -- epoch ms hạn ôn
+  lastreview        BIGINT,
+  selectedforstudy  TEXT             -- cột dự phòng (không dùng)
 );
 
-create table if not exists public.srs_user (
-  "user" text not null,
-  word text not null,
-  addedat bigint,
-  reps integer,
-  lapses integer,
-  ease real,
-  interval bigint,
-  due bigint,
-  lastreview bigint,
-  primary key ("user", word),
-  constraint srs_user_word_fkey foreign key (word) references words_shared (word) on delete cascade
+CREATE TABLE IF NOT EXISTS public.srs_user (
+  "user"     TEXT NOT NULL,
+  word       TEXT NOT NULL REFERENCES public.words_shared(word) ON DELETE CASCADE,
+  addedat    BIGINT,
+  reps       INTEGER,
+  lapses     INTEGER,
+  ease       REAL,
+  interval   BIGINT,
+  due        BIGINT,
+  lastreview BIGINT,
+  PRIMARY KEY ("user", word)
 );
 
-create table if not exists public.users (
-  username text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  streak_count integer NOT NULL DEFAULT 0,
-  best_streak integer NOT NULL DEFAULT 0,
-  last_active timestamptz,
-  new_words_today integer NOT NULL DEFAULT 0,
-  new_words_date date,
-  reviews_today integer NOT NULL DEFAULT 0,
-  reviews_date date,
-  reviewed_words_today jsonb,
-  daily_review_limit integer,
-  constraint users_pkey primary key (username),
-  constraint users_username_key unique (username)
+CREATE TABLE IF NOT EXISTS public.users (
+  username             TEXT PRIMARY KEY,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  streak_count         INTEGER NOT NULL DEFAULT 0,
+  best_streak          INTEGER NOT NULL DEFAULT 0,
+  last_active          TIMESTAMPTZ,
+  new_words_today      INTEGER NOT NULL DEFAULT 0,
+  new_words_date       DATE,
+  reviews_today        INTEGER NOT NULL DEFAULT 0,
+  reviews_date         DATE,
+  reviewed_words_today JSONB,
+  daily_review_limit   INTEGER,
+  -- Cột dự phòng mở rộng
+  attrs                JSONB
 );
 
--- Nếu nâng cấp từ phiên bản cũ (các cột streak có thể NULL) chạy:
--- ALTER TABLE public.users ALTER COLUMN streak_count SET DEFAULT 0;
--- ALTER TABLE public.users ALTER COLUMN streak_count SET NOT NULL;
--- ALTER TABLE public.users ALTER COLUMN best_streak SET DEFAULT 0;
--- ALTER TABLE public.users ALTER COLUMN best_streak SET NOT NULL;
--- ALTER TABLE public.users ADD CONSTRAINT users_username_key UNIQUE (username); -- nếu chưa có
-
-create table if not exists public.feedback (
-  id uuid primary key default gen_random_uuid(),
-  message text,
-  ctx text,
-  "user" text,
-  created_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS public.feedback (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message    TEXT,
+  ctx        TEXT,
+  "user"     TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Chính sách RLS (ví dụ: cho phép đọc/ghi public anon)
-alter table public.words_shared enable row level security;
-alter table public.srs_user enable row level security;
-alter table public.feedback enable row level security;
-alter table public.users enable row level security;
+-- 2. Indexes -----------------------------------------------------
+-- Unique index trên users (phòng trường hợp constraint bị drop ở môi trường cũ)
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_idx ON public.users(username);
+-- Truy vấn feedback mới nhất
+CREATE INDEX IF NOT EXISTS feedback_created_at_idx ON public.feedback(created_at DESC);
+-- SRS truy vấn đến hạn
+CREATE INDEX IF NOT EXISTS srs_user_due_idx ON public.srs_user(due);
+-- Words tìm theo pos
+CREATE INDEX IF NOT EXISTS words_shared_pos_idx ON public.words_shared(pos);
 
-create policy anon_read_words on public.words_shared for select using (true);
-create policy anon_upsert_words on public.words_shared for insert with check (true);
-create policy anon_update_words on public.words_shared for update using (true) with check (true);
+-- 3. Data Quality / Constraints ---------------------------------
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_best_ge_streak') THEN
+    ALTER TABLE public.users DROP CONSTRAINT users_best_ge_streak;
+  END IF;
+  ALTER TABLE public.users ADD CONSTRAINT users_best_ge_streak CHECK (best_streak >= streak_count);
+END $$;
 
-create policy anon_read_srs on public.srs_user for select using (true);
-create policy anon_upsert_srs on public.srs_user for insert with check (true);
-create policy anon_update_srs on public.srs_user for update using (true) with check (true);
+-- 4. RLS ENABLE --------------------------------------------------
+ALTER TABLE public.words_shared ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.srs_user     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.feedback     ENABLE ROW LEVEL SECURITY;
 
-create policy anon_read_feedback on public.feedback for select using (true);
-create policy anon_insert_feedback on public.feedback for insert with check (true);
+-- 5. Policies (open, sử dụng anon key) ---------------------------
+-- Helper để drop nếu tồn tại
+DO $$ DECLARE r RECORD; BEGIN
+  FOR r IN SELECT schemaname, tablename, policyname FROM pg_policies WHERE schemaname='public' AND tablename IN ('words_shared','srs_user','users','feedback') LOOP
+    EXECUTE format('DROP POLICY %I ON public.%I', r.policyname, r.tablename);
+  END LOOP; END $$;
 
-create policy anon_read_users on public.users for select using (true);
-create policy anon_upsert_users on public.users for insert with check (true);
-create policy anon_update_users on public.users for update using (true) with check (true);
+-- words_shared
+CREATE POLICY anon_read_words   ON public.words_shared FOR SELECT USING (true);
+CREATE POLICY anon_upsert_words ON public.words_shared FOR INSERT WITH CHECK (true);
+CREATE POLICY anon_update_words ON public.words_shared FOR UPDATE USING (true) WITH CHECK (true);
+
+-- srs_user
+CREATE POLICY anon_read_srs     ON public.srs_user FOR SELECT USING (true);
+CREATE POLICY anon_upsert_srs   ON public.srs_user FOR INSERT WITH CHECK (true);
+CREATE POLICY anon_update_srs   ON public.srs_user FOR UPDATE USING (true) WITH CHECK (true);
+
+-- users
+CREATE POLICY anon_read_users   ON public.users FOR SELECT USING (true);
+CREATE POLICY anon_upsert_users ON public.users FOR INSERT WITH CHECK (true);
+CREATE POLICY anon_update_users ON public.users FOR UPDATE USING (true) WITH CHECK (true);
+
+-- feedback
+CREATE POLICY anon_read_feedback  ON public.feedback FOR SELECT USING (true);
+CREATE POLICY anon_insert_feedback ON public.feedback FOR INSERT WITH CHECK (true);
+
+-- 6. Grants ------------------------------------------------------
+GRANT USAGE ON SCHEMA public TO anon;
+GRANT SELECT, INSERT, UPDATE ON public.words_shared TO anon;
+GRANT SELECT, INSERT, UPDATE ON public.srs_user TO anon;
+GRANT SELECT, INSERT, UPDATE ON public.users TO anon;
+GRANT SELECT, INSERT ON public.feedback TO anon;
+
+-- (Tuỳ chọn) Grant cho authenticated (nếu dùng Supabase Auth)
+GRANT SELECT, INSERT, UPDATE ON public.words_shared TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.srs_user TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.users TO authenticated;
+GRANT SELECT, INSERT ON public.feedback TO authenticated;
+
+-- 7. (Optional) Trigger cập nhật streak theo last_active ---------
+-- Có thể thêm sau: khi user hoạt động ngày mới => streak_count++ và best_streak cập nhật.
+-- Giữ trống để tránh phức tạp trong bản tối giản.
+
+-- 8. Kiểm tra trùng username (chỉ cảnh báo) ----------------------
+SELECT username, COUNT(*) AS cnt FROM public.users GROUP BY username HAVING COUNT(*) > 1;
+
+-- 9. Mẫu cập nhật streak thủ công --------------------------------
+-- UPDATE public.users
+--   SET streak_count = streak_count + 1,
+--       best_streak  = GREATEST(best_streak, streak_count + 1),
+--       last_active  = NOW()
+-- WHERE username='demo';
+
+-- 10. Mẫu insert feedback ---------------------------------------
+-- INSERT INTO public.feedback(message, ctx, "user") VALUES ('Great app', 'index.html', 'demo');
+
+-- END SCHEMA SETUP
 ```
 
-Lưu ý: Tùy nhu cầu bảo mật, bạn có thể siết RLS và dùng Auth — ví dụ ràng buộc theo `auth.uid()` thay cho public anon.
+## Nâng cấp lên mức bảo mật cao hơn
+Khi bật Supabase Auth:
+1. Thêm cột `user_id uuid DEFAULT auth.uid()` trong bảng cần ràng buộc.
+2. Thay `USING (true)` bằng biểu thức `auth.uid() = user_id`.
+3. Thu hẹp quyền của role `anon` chỉ còn SELECT hạn chế hoặc bỏ hẳn.
 
-## Cấu hình
+## Cấu hình Front-end
 Sửa `assets/js/config.js`:
+```js
+export const DATA_SOURCE = 'supabase';
+export const SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
+export const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
+export const SUPABASE_WORDS_TABLE = 'words_shared';
+export const SUPABASE_SRS_TABLE = 'srs_user';
+export const SUPABASE_USERS_TABLE = 'users';
+export const SUPABASE_FEEDBACK_TABLE = 'feedback';
+```
+Gọi REST: `fetch(\`${SUPABASE_URL}/rest/v1/words_shared?select=*\`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY }})`.
 
-- DATA_SOURCE: 'supabase'
-- SUPABASE_URL, SUPABASE_ANON_KEY: lấy từ Supabase Project Settings → API
-- SUPABASE_WORDS_TABLE, SUPABASE_SRS_TABLE, SUPABASE_FEEDBACK_TABLE: tên bảng nếu bạn tuỳ biến
+## DeepL Proxy (Cloudflare Workers)
+Dùng proxy để che API key:
+```js
+export default {
+  async fetch(req, env) {
+    const allowedOrigin = 'https://cardcard.thienpahm.dev';
+    if (req.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: {
+        'Access-Control-Allow-Origin': allowedOrigin,
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      }});
+    }
+    if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
+    const body = await req.json();
+    const { text, target_lang, source_lang } = body;
+    const apiKey = env.DEEPL_API_KEY;
+    if (!apiKey) return new Response('Missing DEEPL_API_KEY', { status: 500 });
+    const params = new URLSearchParams();
+    params.append('text', text);
+    params.append('target_lang', target_lang || 'EN');
+    if (source_lang) params.append('source_lang', source_lang);
+    const deepl = await fetch('https://api-free.deepl.com/v2/translate', {
+      method: 'POST',
+      headers: { 'Authorization': `DeepL-Auth-Key ${apiKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    });
+    const json = await deepl.text();
+    return new Response(json, { status: deepl.status, headers: {
+      'Access-Control-Allow-Origin': allowedOrigin,
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Content-Type': 'application/json'
+    }});
+  }
+};
+```
+Environment Variable: `DEEPL_API_KEY`.
 
-App sử dụng REST API trực tiếp, không phụ thuộc thư viện supabase-js.
-
-### Dịch câu bằng DeepL
-- Thêm `DEEPL_API_KEY` vào `assets/js/config.js`. Nếu là key Free (đuôi `:fx`), app tự dùng `api-free.deepl.com`.
-- Khuyến nghị: dùng một backend/proxy riêng (ví dụ Supabase Edge Functions, Cloudflare Workers) để che khóa và tránh CORS. Apps Script đã được loại bỏ khỏi dự án này.
-
-## Chạy trên máy
-
+## Chạy cục bộ
 ```bash
-cd /Users/thien/Documents/codtalk/learnEnglish
 python3 -m http.server 8000
 # Mở http://localhost:8000
 ```
 
-## Nhập dữ liệu nhanh (admin.html)
-- Nhập từ: điền Từ vựng, định nghĩa (nhiều dòng), ví dụ (tuỳ chọn), Lưu → dữ liệu được upsert vào `words_shared`
-- Dán nhanh: dán TSV/CSV (cột 2: từ, cột 4: nghĩa "a; b", cột 5: ví dụ "ex1; ex2") → Nhập → upsert hàng loạt
+## Quy trình nhập từ (admin.html)
+1. Nhập thủ công: điền từ, nghĩa (mỗi dòng một nghĩa) → Lưu → upsert.
+2. Dán TSV/CSV: map cột và xác nhận preview trước khi gửi.
 
-## SRS (tự động)
-- Khi trả lời trên `index.html`, app tự tính lịch (SM-2 rút gọn) và ghi tiến độ vào `srs_user` (khóa phức hợp `user, word`)
-- Username lưu ở LocalStorage (không có đăng nhập). Bạn có thể thêm Auth của Supabase nếu cần.
+## SRS Logic tóm tắt
+- Ease mặc định ~2.5; đúng tăng ease nhẹ, sai giảm.
+- interval tính theo công thức rút gọn (không đầy đủ SM-2).
+- `due` = `NOW + interval` (quy đổi ms nếu cần).
 
-## Góp ý (feedback.html)
-- Danh sách góp ý đọc trực tiếp từ `feedback` (order by created_at desc)
-- Nút Góp ý trên trang luyện tập gửi vào `feedback` (nếu mất mạng sẽ buffer và gửi lại sau)
+## Checklist sau khi deploy
+- [ ] Chạy FULL SCHEMA SETUP.
+- [ ] Kiểm tra không có username trùng.
+- [ ] Thử insert vào từng bảng qua REST.
+- [ ] Kiểm tra policies hiển thị trong Supabase Dashboard.
+- [ ] Kiểm tra CORS proxy DeepL (nếu dùng).
 
-## Gỡ bỏ Google Sheet/App Script
-- Toàn bộ UI và mã liên quan Sheet đã được xoá khỏi `admin.html`, `index.html`, và JS.
-- Nếu thư mục `apps_script/` còn tồn tại trong repo của bạn, có thể xoá thủ công vì không còn dùng.
+## Giấy phép
+MIT
 
-## Supabase Policies cập nhật (sửa lỗi RLS khi upsert users)
-Nếu gặp lỗi: `new row violates row-level security policy (USING expression) for table "users"` khi gọi `POST /rest/v1/users?on_conflict=username` thì cần:
-
-1. Đảm bảo cột `username` có unique index.
-2. Bật RLS cho bảng `users` (và các bảng khác nếu chưa bật).
-3. Tạo chính sách cho phép anon đọc / insert / update (vì app dùng anon key làm JWT). Sau này có thể siết lại dùng Supabase Auth.
-
-SQL nhanh (chạy trong SQL Editor Supabase):
-
-```sql
--- Unique index (nếu chưa có)
-create unique index if not exists users_username_key on public.users (username);
-
--- Bật RLS (nếu chưa bật)
-alter table public.users enable row level security;
-
--- Xoá policy cũ (nếu có) để tránh trùng tên
-drop policy if exists anon_read_users on public.users;
-drop policy if exists anon_upsert_users on public.users;
-drop policy if exists anon_update_users on public.users;
-
--- Chính sách mở cho anon (tối thiểu để app hoạt động)
-create policy anon_read_users on public.users for select using (true);
-create policy anon_upsert_users on public.users for insert with check (true);
-create policy anon_update_users on public.users for update using (true) with check (true);
-
--- (Tuỳ chọn) Nếu muốn reset về public cho bảng khác
--- alter table public.words_shared enable row level security;
--- alter table public.srs_user enable row level security;
--- alter table public.feedback enable row level security;
+## Tham khảo
+- Supabase REST: https://supabase.com/docs/guides/api
+- RLS Policies: https://supabase.com/docs/guides/auth/row-level-security
+- DeepL API: https://www.deepl.com/en/docs-api
 ```
+UPDATE public.users SET best_streak = COALESCE(best_streak, streak_count, 0);
+ALTER TABLE public.users ALTER COLUMN streak_count SET NOT NULL;
+ALTER TABLE public.users ALTER COLUMN best_streak SET NOT NULL;
 
-Nếu muốn bảo mật hơn:
-- Bật Supabase Auth, thêm cột `id uuid default auth.uid()` rồi dùng `auth.uid() = id` trong USING/WITH CHECK.
-- Thay vì gửi Bearer anon key, dùng access token của người dùng.
+-- Constraint: best_streak >= streak_count (drop & recreate để chắc chắn)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_best_ge_streak') THEN
+    ALTER TABLE public.users DROP CONSTRAINT users_best_ge_streak;
+  END IF;
+  ALTER TABLE public.users ADD CONSTRAINT users_best_ge_streak CHECK (best_streak >= streak_count);
+END $$;
 
-Tối ưu hoá sau này:
-- Thêm `created_at` index nếu cần truy vấn theo thời gian.
-- Thêm trigger chuẩn hoá `username` (LOWER) để tránh trùng phân biệt hoa thường.
+---------------------------------------------
+-- 5. RLS policies (chọn ENABLE hoặc DISABLE) --
+---------------------------------------------
+-- Option A: Disable RLS
+-- ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
+
+-- Option B: Enable RLS + open policies
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='users' AND policyname='users_select_all') THEN
+    DROP POLICY users_select_all ON public.users; END IF;
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='users' AND policyname='users_insert_any') THEN
+    DROP POLICY users_insert_any ON public.users; END IF;
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='users' AND policyname='users_update_any') THEN
+    DROP POLICY users_update_any ON public.users; END IF;
+END $$;
+CREATE POLICY users_select_all ON public.users FOR SELECT USING (true);
+CREATE POLICY users_insert_any ON public.users FOR INSERT WITH CHECK (true);
+CREATE POLICY users_update_any ON public.users FOR UPDATE USING (true) WITH CHECK (true);
+
+-------------------------------
+-- 6. Grants cho role anon    --
+-------------------------------
+GRANT USAGE ON SCHEMA public TO anon;
+GRANT SELECT, INSERT, UPDATE ON public.users TO anon;
+
+-----------------------------------------
+-- 7. Test queries (chạy riêng)          --
+-----------------------------------------
+-- SELECT username, streak_count, best_streak, last_active FROM public.users WHERE username='thienpahm';
+-- UPDATE public.users
+--   SET streak_count = streak_count + 1,
+--       best_streak = GREATEST(best_streak, streak_count + 1),
+--       last_active = NOW()
+-- WHERE username='thienpahm';
+
+-- End of script
+```
 
 ## Giấy phép
 MIT.
