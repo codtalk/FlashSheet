@@ -144,7 +144,9 @@ function bestEffortUpsertUser(uname){
         'Prefer': 'resolution=merge-duplicates'
       };
       const nowIso = new Date().toISOString();
-      const ext = [{ username: uname, created_at: nowIso, streak_count: 0, best_streak: 0, last_active: nowIso }];
+      // Important: do NOT include streak fields here to avoid resetting them to 0.
+      // Only ensure a user row exists; streak will be managed by learn.js
+      const ext = [{ username: uname, created_at: nowIso }];
       fetch(url, { method:'POST', headers, body: JSON.stringify(ext) })
         .then(resp => { if (!resp.ok) throw new Error('ext upsert failed'); })
         .catch(()=>{

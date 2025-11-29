@@ -193,19 +193,22 @@
         } else {
           row = rows[0];
         }
-        const count = Number(row?.streak_count || 0) || 0;
-        const best = Number(row?.best_streak || 0) || 0;
-        const lastDay = isoToLocalDay(row?.last_active || '');
-        return { count, best, lastDay };
+        const remote = {
+          count: Number(row?.streak_count || 0) || 0,
+          best: Number(row?.best_streak || 0) || 0,
+          lastDay: isoToLocalDay(row?.last_active || '')
+        };
+        return remote;
       }
     }catch(err){ console.warn('loadStreak supabase error', err); }
+    // Remote failed: in Supabase mode, return zeros (no local authority)
     return { count: 0, best: 0, lastDay: '' };
   }
   async function saveStreak(s){
     const appCfg = (window.APP_CONFIG||{});
     const SUPABASE_ENABLED = appCfg.DATA_SOURCE === 'supabase' && appCfg.SUPABASE_URL && appCfg.SUPABASE_ANON_KEY;
     const username = (typeof loadUser === 'function') ? (loadUser() || '') : '';
-    // Local fallback when Supabase not configured or username missing
+    // Only write local when Supabase is not enabled (dev/offline mode)
     if (!SUPABASE_ENABLED || !username){
       try{
         const nowDay = todayKey();
@@ -221,7 +224,7 @@
         'Authorization': `Bearer ${appCfg.SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Prefer': 'resolution=merge-duplicates'
+        'Prefer': 'resolution=merge-duplicates,return=representation'
       };
       const table = appCfg.SUPABASE_USERS_TABLE || 'users';
       const url = `${appCfg.SUPABASE_URL}/rest/v1/${table}?on_conflict=username`;
