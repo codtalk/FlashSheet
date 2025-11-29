@@ -47,7 +47,7 @@
 
   async function renderWords(){
     const table = document.getElementById('wordTable').getElementsByTagName('tbody')[0];
-  table.innerHTML = '<tr><td colspan="6">Đang tải dữ liệu...</td></tr>';
+  table.innerHTML = '<tr><td colspan="9">Đang tải dữ liệu...</td></tr>';
     // Đảm bảo đã có hàm loadUser và ensureUserPrompt từ utils.js
     let username = '';
     if (typeof loadUser === 'function') {
@@ -62,7 +62,7 @@
     }
     const words = await fetchWordsFromSupabase(username);
     if (!words.length){
-      table.innerHTML = '<tr><td colspan="6">Chưa có từ nào được thêm vào.</td></tr>';
+      table.innerHTML = '<tr><td colspan="9">Chưa có từ nào được thêm vào.</td></tr>';
       return;
     }
     table.innerHTML = '';
@@ -86,12 +86,23 @@
         status = (hasReps ? (`${card.reps||0} lần`) : '');
       }
       const nextDueStr = dueVal ? formatDate(dueVal) : '';
+      const intervalDays = (card.interval != null) ? Number(card.interval) : null; // days
+      // Count all correct answers, including confirmations that don't increase reps.
+      // Support multiple possible fields for non-level-up corrects if present.
+      const repsCount = Number(card.reps || 0) || 0;
+      const confirmCount = Number(card.confirms || 0) || 0; // in-session or persisted if available
+      const extraCorrect = Number(card.correct_total || 0) || 0; // fallback schema if used
+      const correctCount = repsCount + Math.max(confirmCount, extraCorrect, 0);
+      const wrongCount = Number(card.lapses || 0) || 0; // failures
       tr.innerHTML = `
         <td>${card.word}</td>
         <td>${formatDate(card.addedat)}</td>
         <td>${formatDate(card.lastreview)}</td>
         <td>${nextDueStr}</td>
+        <td>${intervalDays!=null ? intervalDays : ''}</td>
         <td>${status}</td>
+        <td>${correctCount}</td>
+        <td>${wrongCount}</td>
         <td>${card.reps||0}</td>
       `;
       table.appendChild(tr);
