@@ -13,6 +13,11 @@ WHERE t.relname = 'users';
 -- Existing indexes
 SELECT indexname, indexdef FROM pg_indexes WHERE tablename='users';
 
+-- Ensure confirms column exists on srs_user to track non-level-up correct answers
+ALTER TABLE public.srs_user ADD COLUMN IF NOT EXISTS confirms INTEGER DEFAULT 0;
+-- (Optional) Future: index if querying by confirms
+-- CREATE INDEX IF NOT EXISTS srs_user_confirms_idx ON public.srs_user(confirms);
+
 -- Check duplicate usernames (must be empty before adding UNIQUE)
 SELECT username, count(*) AS cnt
 FROM public.users

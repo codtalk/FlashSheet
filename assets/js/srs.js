@@ -31,6 +31,7 @@
         interval: 0, // days
         due: Date.now(), // immediate
         lastReview: 0,
+        confirms: 0, // số lần đúng xác nhận (chưa lên cấp)
       };
     }
     return store[k];
@@ -46,6 +47,7 @@
       card.interval = 1; // review again tomorrow after the immediate retry window
       // Immediate retry in a short period (Again delay)
       card.due = now + AGAIN_DELAY_MINUTES * 60 * 1000;
+      card.confirms = 0; // reset confirmations sau khi sai
     } else if (quality === 6) {
       // Correct confirmation without leveling up: keep reps unchanged, schedule next day
       // Slight ease improvement to reflect positive performance
@@ -53,6 +55,7 @@
       const efChange = 0.05;
       card.ease = Math.max(MIN_EASE, (card.ease||DEFAULT_EASE) + efChange);
       card.due = now + 1 * 86400000;
+      card.confirms = (card.confirms||0) + 1; // tích luỹ xác nhận đúng
     } else {
       console.log('Scheduling with quality', quality);
       console.log("reps before", card.reps);
@@ -67,6 +70,7 @@
       const efChange = 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02);
       card.ease = Math.max(MIN_EASE, card.ease + efChange);
       card.due = now + card.interval * 86400000;
+      card.confirms = 0; // reset sau khi lên cấp
     }
     card.lastReview = now;
     return card;

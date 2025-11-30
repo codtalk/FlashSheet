@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS public.srs_user (
   word       TEXT NOT NULL REFERENCES public.words_shared(word) ON DELETE CASCADE,
   addedat    BIGINT,
   reps       INTEGER,
+  confirms   INTEGER,          -- số lần đúng xác nhận (đúng nhưng chưa lên cấp)
   lapses     INTEGER,
   ease       REAL,
   interval   BIGINT,
@@ -247,6 +248,9 @@ python3 -m http.server 8000
 - Ease mặc định ~2.5; đúng tăng ease nhẹ, sai giảm.
 - interval tính theo công thức rút gọn (không đầy đủ SM-2).
 - `due` = `NOW + interval` (quy đổi ms nếu cần).
+- `reps`: số lần thẻ lên cấp (level-up) — chỉ tăng ở lần đúng đủ điều kiện sau chuỗi xác nhận.
+- `confirms`: số lần đúng xác nhận (đáp án đúng nhưng chưa lên cấp). Khi đạt ngưỡng (mặc định 2) lần đúng xác nhận tiếp theo sẽ chuyển thành level-up (tăng `reps` và reset `confirms`). Sai sẽ reset `confirms` về 0.
+- Cột Đúng trong `mywords.html` = `reps + confirms` để phản ánh tổng số lần trả lời đúng (gồm cả xác nhận chưa lên cấp).
 
 ## Checklist sau khi deploy
 - [ ] Chạy FULL SCHEMA SETUP.

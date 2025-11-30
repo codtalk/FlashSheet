@@ -593,6 +593,7 @@
         item.ease = card.ease;
         item.lapses = card.lapses;
         item.addedat = card.addedat;
+        item.confirms = card.confirms; // đồng bộ số lần đúng xác nhận
       }catch{}
     }catch(e){ console.warn('SRS schedule failed', e); }
 
@@ -614,6 +615,7 @@
           interval: card.interval,
           due: card.due,
           lastreview: card.lastReview,
+          confirms: card.confirms,
         }]).catch(()=>{});
       }
     }catch(e){ /* ignore */ }

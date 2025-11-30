@@ -90,9 +90,8 @@
       // Count all correct answers, including confirmations that don't increase reps.
       // Support multiple possible fields for non-level-up corrects if present.
       const repsCount = Number(card.reps || 0) || 0;
-      const confirmCount = Number(card.confirms || 0) || 0; // in-session or persisted if available
-      const extraCorrect = Number(card.correct_total || 0) || 0; // fallback schema if used
-      const correctCount = repsCount + Math.max(confirmCount, extraCorrect, 0);
+      const confirmCount = Number(card.confirms || 0) || 0; // số lần đúng chưa lên cấp (persisted)
+      const correctCount = repsCount + confirmCount; // tổng đúng = lần lên cấp + đúng xác nhận
       const wrongCount = Number(card.lapses || 0) || 0; // failures
       tr.innerHTML = `
         <td>${card.word}</td>

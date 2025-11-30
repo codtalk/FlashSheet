@@ -624,7 +624,7 @@ async function appendRowsToSheet(endpoint, rows){
         const hasSrs = r && (
           r.addedat != null ||
           r.reps != null || r.lapses != null || r.ease != null || r.interval != null || r.due != null ||
-          r.lastreview != null
+          r.lastreview != null || r.confirms != null
         );
         if (r && r.word && hasSrs){
           const url = `${APP_CFG.SUPABASE_URL}/rest/v1/${srsTable}?on_conflict=user,word`;
@@ -650,7 +650,8 @@ async function appendRowsToSheet(endpoint, rows){
             ease: r.ease ?? null,
             interval: toNum(r.interval ?? null),
             due: toNum(r.due ?? null),
-            lastreview: toNum(r.lastreview ?? null)
+            lastreview: toNum(r.lastreview ?? null),
+            confirms: r.confirms != null ? toNum(r.confirms) : null
           }];
           const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload) });
           if (!resp.ok) throw new Error(`srs upsert failed (${resp.status})`);
