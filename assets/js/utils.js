@@ -641,7 +641,8 @@ async function appendRowsToSheet(endpoint, rows){
             }
             return null;
           };
-          const payload = [{
+          // Build SRS payload; omit confirms if null/undefined to avoid overwriting with NULL
+          const payloadObj = {
             user: user || '',
             word: r.word,
             addedat: toNum(r.addedat ?? null),
@@ -650,9 +651,10 @@ async function appendRowsToSheet(endpoint, rows){
             ease: r.ease ?? null,
             interval: toNum(r.interval ?? null),
             due: toNum(r.due ?? null),
-            lastreview: toNum(r.lastreview ?? null),
-            confirms: r.confirms != null ? toNum(r.confirms) : null
-          }];
+            lastreview: toNum(r.lastreview ?? null)
+          };
+          if (r.confirms != null) payloadObj.confirms = toNum(r.confirms); // keep existing value, do not null out
+          const payload = [payloadObj];
           const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload) });
           if (!resp.ok) throw new Error(`srs upsert failed (${resp.status})`);
           out.push({ ok:true, type:'srs' });

@@ -461,6 +461,8 @@
     const item = dataset[index];
     const p = touchProgress(item.word);
     p.seen += 1; p.lastSeen = Date.now();
+    // Defensive: never let confirms be null/undefined
+    if (p.confirms == null) p.confirms = 0;
     if (ok) { p.correct += 1; p.streak = (p.streak||0) + 1; p.confirms = (p.confirms||0) + 1; }
     else { p.wrong += 1; p.streak = 0; p.confirms = 0; }
     saveProgress();
@@ -1053,48 +1055,58 @@
         const item = (current >= 0 && dataset[current]) ? dataset[current] : null;
         const sentence = buildFilledSentence(item).trim();
         if (!sentence || !isEnglish(sentence)) return;
-        // Wait for SFX to finish then speak the full English sentence
-        try{ await lastSfxPromise; }catch{}
-        if (LE && LE.tts && LE.tts.supported && LE.tts.supported()){
-          await LE.tts.speak(sentence, { lang:'en-US', rate: 0.98 });
-        }
-        // Inline display: full sentence and translation
+
+        const showTrans = !!(toggleTrans?.checked);
+        const transRef = getPreferredTranslation(item);
+        const markerAttr = 'data-full-sentence';
+        const transMarkerAttr = 'data-full-sentence-trans';
+
+        // Update UI immediately with placeholder so translation can resolve asynchronously
         if (translationBox){
-          const showTrans = !!(toggleTrans?.checked);
-          const transRef = getPreferredTranslation(item);
-          // Avoid duplicating the full sentence row by tagging it
-          const markerAttr = 'data-full-sentence';
-          const transMarkerAttr = 'data-full-sentence-trans';
           const hasRow = translationBox.querySelector(`[${markerAttr}="1"]`);
           const parts = [];
           parts.push(`<div class=\"translation-row\" ${markerAttr}=\"1\"><span class=\"muted\">Câu đầy đủ:</span> <span>${sentence}</span></div>`);
-          // Placeholder row for sentence translation (will update below)
           if (showTrans){
             parts.push(`<div class=\"translation-row\" ${transMarkerAttr}=\"1\"><span class=\"muted\">Dịch câu:</span> <span>Đang dịch…</span></div>`);
           }
-          // Also keep reference word translation if any
           if (showTrans && transRef){
             parts.push(`<div class=\"translation-row\"><span class=\"muted\">Dịch (tham khảo từ):</span> <span>${transRef}</span></div>`);
           }
           if (hasRow){
-            // Replace existing full-sentence block
-            // Simple approach: rebuild content keeping existing links if any
             const links = translationBox.querySelector('.translation-links');
             const linksHTML = links ? links.outerHTML : '';
             translationBox.innerHTML = `${parts.join('')}${linksHTML}`;
           } else {
-            // Append below any existing content
             translationBox.innerHTML = `${parts.join('')}${translationBox.innerHTML}`;
           }
           if (postAnswer){ postAnswer.hidden = false; }
-          // Try live translation via LE.translate if configured
-          if (showTrans && window.LE && LE.translate){
+        }
+
+        // Start translation immediately (do not await) so it runs parallel with TTS
+        let translatePromise = null;
+        if (showTrans && window.LE && LE.translate){
+          translatePromise = LE.translate(sentence, 'en', 'vi')
+            .then(vi => ({ ok:true, vi }))
+            .catch(err => ({ ok:false, err }));
+        }
+
+        // Respect any pending SFX, then kick off speaking without awaiting completion
+        try{ await lastSfxPromise; }catch{}
+        try{
+          if (LE && LE.tts && LE.tts.supported && LE.tts.supported()){
+            LE.tts.speak(sentence, { lang:'en-US', rate: 0.98 }).catch(()=>{});
+          }
+        }catch{}
+
+        // When translation finishes, update the placeholder row
+        if (translatePromise){
+          translatePromise.then(res => {
             try{
-              const vi = await LE.translate(sentence, 'en', 'vi');
-              const row = translationBox.querySelector(`[${transMarkerAttr}=\"1\"] span:last-child`);
+              const vi = res.ok ? res.vi : null;
+              const row = translationBox?.querySelector(`[${transMarkerAttr}="1"] span:last-child`);
               if (row){ row.textContent = vi || '(Không dịch được)'; }
             }catch{}
-          }
+          });
         }
       }catch{}
     });
