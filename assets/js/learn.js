@@ -61,6 +61,8 @@
   const AUTO_TRANS_KEY = 'fs_auto_trans';
   let lastSpeakParts = [];
   let lastSfxPromise = Promise.resolve();
+  // Preloaded TTS audio for instant playback on answer
+  let preloadedTTS = { key: '', audio: null, url: '' };
   // SRS store
   let srsStore = {};
   let srsQueue = []; // array of word keys (due first then new)
@@ -127,6 +129,49 @@
       const key = keyForWord(word);
       if (key) srsStore[key] = card;
     });
+  }
+
+  // Build audio TTS URL (mirrors LE.tts.speakViaAudio logic)
+  function buildAudioTTSUrl(text){
+    try{
+      const t = (text||'').toString().trim();
+      if (!t) return '';
+      const cfg = (window.LE && LE.loadSheetConfig && LE.loadSheetConfig()) || {};
+      const base = cfg.ttsUrl || '';
+      if (base){
+        const sep = base.includes('?') ? '&' : '?';
+        return `${base}${sep}text=${encodeURIComponent(t)}&lang=en`;
+      }
+      const q = encodeURIComponent(t);
+      const tl = encodeURIComponent('en');
+      return `https://translate.google.com/translate_tts?ie=UTF-8&q=${q}&tl=${tl}&client=tw-ob`;
+    }catch{ return ''; }
+  }
+
+  function preloadTTSForWord(word){
+    try{
+      const k = keyForWord(word);
+      if (!k) return;
+      const url = buildAudioTTSUrl(word);
+      if (!url) return;
+      const a = new Audio();
+      a.crossOrigin = 'anonymous';
+      a.preload = 'auto';
+      a.src = url;
+      try{ a.load(); }catch{}
+      preloadedTTS = { key: k, audio: a, url };
+    }catch{}
+  }
+
+  function playPreloadedTTS(word){
+    try{
+      const k = keyForWord(word);
+      if (!k || !preloadedTTS || preloadedTTS.key !== k || !preloadedTTS.audio) return false;
+      const a = preloadedTTS.audio;
+      a.currentTime = 0;
+      a.play().catch(()=>{});
+      return true;
+    }catch{ return false; }
   }
 
   function updateStats(){
@@ -355,7 +400,14 @@
     // reset post-answer area
     if (postAnswer){ postAnswer.hidden = true; }
     if (translationBox){ translationBox.innerHTML = ''; }
-    
+    // Preload TTS audio ahead of answer if Web Speech not available
+    try{
+      const autoTTS = !!(toggleTTS && toggleTTS.checked);
+      const canSpeak = !!(window.LE && LE.tts && LE.tts.supported && LE.tts.supported());
+      if (autoTTS && !canSpeak){ preloadTTSForWord(item.word); }
+      else { preloadedTTS = { key:'', audio:null, url:'' }; }
+    }catch{}
+
   }
 
   function renderAnswerUI(index){
@@ -820,8 +872,13 @@
           }
         }
       }catch{}
-      if (!spokenAny && LE.tts.speakViaAudio){
-        try{ await LE.tts.speakViaAudio(lastSpeakParts[0].text, { lang:'en' }); }catch{}
+      if (!spokenAny){
+        const w = (lastSpeakParts[0] && lastSpeakParts[0].text) ? lastSpeakParts[0].text : '';
+        // Try instant playback from preloaded audio first
+        const played = playPreloadedTTS(w);
+        if (!played && LE.tts.speakViaAudio){
+          try{ await LE.tts.speakViaAudio(w, { lang:'en' }); }catch{}
+        }
       }
     }
     if (postAnswer && (!postAnswer.hidden)){
@@ -1010,6 +1067,8 @@
     }catch{}
     // Feature availability: TTS
     const ttsSupported = !!(window.LE && LE.tts && LE.tts.supported && LE.tts.supported());
+    // Warm up voices early to avoid first-speak delay
+    try{ if (LE && LE.tts && LE.tts.ensureVoices) LE.tts.ensureVoices(); }catch{}
     if (btnReplayTTS){ btnReplayTTS.disabled = !ttsSupported; }
     if (toggleTTS && !ttsSupported){
       toggleTTS.checked = false;
