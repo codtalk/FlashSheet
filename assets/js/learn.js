@@ -108,6 +108,10 @@
     if (Number.isFinite(ease) && ease > 0) card.ease = ease;
     const interval = Number(item.interval);
     if (Number.isFinite(interval) && interval >= 0) card.interval = interval;
+    // Restore confirms (số lần đúng xác nhận) từ dữ liệu nếu có,
+    // để không bị reset về 0 khi đóng/mở ứng dụng.
+    const confirms = Number(item.confirms);
+    if (Number.isFinite(confirms) && confirms >= 0) card.confirms = confirms;
     item.addedat = card.addedat;
     item.lastreview = card.lastReview;
     item.due = card.due;
@@ -115,6 +119,7 @@
     item.lapses = card.lapses;
     item.ease = card.ease;
     item.interval = card.interval;
+    item.confirms = card.confirms;
     return card;
   }
 
