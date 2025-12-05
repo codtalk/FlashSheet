@@ -603,7 +603,7 @@ async function appendRowsToSheet(endpoint, rows){
       'Authorization': `Bearer ${APP_CFG.SUPABASE_ANON_KEY}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'Prefer': 'resolution=merge-duplicates'
+      'Prefer': 'resolution=merge-duplicates,return=representation'
     };
     const user = loadUser();
     const wordsTable = APP_CFG.SUPABASE_WORDS_TABLE || 'words_shared';
@@ -657,6 +657,10 @@ async function appendRowsToSheet(endpoint, rows){
           const payload = [payloadObj];
           const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload) });
           if (!resp.ok) throw new Error(`srs upsert failed (${resp.status})`);
+          try {
+            const json = await resp.json();
+            console.log('[Supabase] srs_user upsert returned:', json);
+          } catch {}
           out.push({ ok:true, type:'srs' });
           continue;
         }

@@ -352,6 +352,63 @@
   }
 
   function setQuestion(index){
+    // Before rendering, best-effort: fetch latest per-user SRS for this word from Supabase and hydrate
+    (async () => {
+      try {
+        const appCfg = (window.APP_CONFIG || {});
+        const isSupabase = appCfg.DATA_SOURCE === 'supabase' && !!appCfg.SUPABASE_URL;
+        const item = (index != null && index >= 0) ? dataset[index] : null;
+        if (isSupabase && item && item.word){
+          const user = (typeof loadUser === 'function') ? (loadUser() || '') : (localStorage.getItem('learnEnglish.username')||'');
+          const table = appCfg.SUPABASE_SRS_TABLE || 'srs_user';
+          const url = `${appCfg.SUPABASE_URL}/rest/v1/${table}?user=eq.${encodeURIComponent(user)}&word=eq.${encodeURIComponent(item.word)}&select=*`;
+          const resp = await fetch(url, { headers: {
+            apikey: appCfg.SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${appCfg.SUPABASE_ANON_KEY}`,
+            Accept: 'application/json',
+          }});
+          if (resp.ok){
+            const rows = await resp.json();
+            if (Array.isArray(rows) && rows.length){
+              const row = rows[0];
+              const card = SRS.ensureCard(srsStore, item.word);
+              // Hydrate latest confirms and key SRS fields
+              hydrateCardFromItem(card, {
+                word: item.word,
+                addedat: row.addedat,
+                lastreview: row.lastreview,
+                due: row.due,
+                reps: row.reps,
+                lapses: row.lapses,
+                ease: row.ease,
+                interval: row.interval,
+                confirms: row.confirms,
+              });
+              // Also keep dataset entry in sync for logging/UI
+              try { item.confirms = card.confirms; } catch {}
+            }
+          }
+        }
+      } catch {}
+      // Log upcoming question info (after hydration) including confirms
+      try {
+        const item2 = (index != null && index >= 0) ? dataset[index] : null;
+        const word2 = item2?.word || '(none)';
+        const p2 = item2 ? touchProgress(item2.word) : null;
+        const card2 = item2 ? SRS.ensureCard(srsStore, item2.word) : null;
+        console.log('[Next] Upcoming question:', {
+          index,
+          word: word2,
+          confirms_item: item2?.confirms,
+          confirms_progress: p2?.confirms,
+          confirms_card: card2?.confirms,
+          reps: card2?.reps,
+          interval: card2?.interval,
+          ease: card2?.ease,
+          due: card2?.due,
+        });
+      } catch {}
+    })();
     if (index == null || index < 0 || !dataset || index >= dataset.length) return;
     current = index;
     const item = dataset[index];
@@ -643,6 +700,19 @@
       SRS.schedule(card, quality);
       srsStore[keyForWord(item.word)] = card;
       SRS.saveStore(srsStore);
+      try {
+        console.log('[Learn] After schedule:', {
+          word: item.word,
+          quality,
+          confirms_card: card.confirms,
+          confirms_item_before: item.confirms,
+          confirms_progress: Number(progressEntry?.confirms||0) || 0,
+          reps: card.reps,
+          interval: card.interval,
+          ease: card.ease,
+          due: card.due,
+        });
+      } catch {}
       // Keep dataset entry in sync so queue/daily counters reflect the new schedule immediately
       try{
         item.reps = card.reps;
@@ -663,6 +733,18 @@
       const writeUrl = (sheetCfg && sheetCfg.writeUrl) || '';
       if ((useSupabase || writeUrl) && window.LE && LE.appendRowsToSheet){
         // Send flat-case keys to match your srs_user schema (addedat, lastreview)
+        try {
+          console.debug('[Learn] Upsert payload (Supabase/Sheet):', {
+            word: item.word,
+            confirms: card.confirms,
+            reps: card.reps,
+            interval: card.interval,
+            ease: card.ease,
+            due: card.due,
+            lastreview: card.lastReview,
+            addedat: card.addedat,
+          });
+        } catch {}
         LE.appendRowsToSheet(writeUrl, [{
           word: item.word,
           meanings: (item.meanings || []),
@@ -998,6 +1080,23 @@
       try{ card.classList.remove('wrong'); void card.offsetWidth; card.classList.add('wrong'); }catch{}
       return;
     }
+    // Log current question info including confirms before moving to next
+    try {
+      const curItem = (current != null && current >= 0) ? dataset[current] : null;
+      const word = curItem?.word || '(none)';
+      const progressEntry = curItem ? touchProgress(curItem.word) : null;
+      const srsCard = curItem ? SRS.ensureCard(srsStore, curItem.word) : null;
+      console.debug('[Next] Current question info:', {
+        word,
+        confirms_item: curItem?.confirms,
+        confirms_progress: progressEntry?.confirms,
+        confirms_card: srsCard?.confirms,
+        reps: srsCard?.reps,
+        interval: srsCard?.interval,
+        ease: srsCard?.ease,
+        due: srsCard?.due,
+      });
+    } catch {}
     // Update daily counters for the current card before moving on
     try{ tallyTodayForCurrent().catch(()=>{}); }catch{}
     // If using SRS queue, advance it properly to avoid repeating the same word

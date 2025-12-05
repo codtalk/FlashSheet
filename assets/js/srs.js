@@ -56,6 +56,7 @@
       card.ease = Math.max(MIN_EASE, (card.ease||DEFAULT_EASE) + efChange);
       card.due = now + 1 * 86400000;
       card.confirms = (card.confirms||0) + 1; // tích luỹ xác nhận đúng
+      try { console.debug('[SRS] quality=6 confirms incremented to', card.confirms, 'word:', (card && card.word) || '(no word)'); } catch {}
     } else {
       console.log('Scheduling with quality', quality);
       console.log("reps before", card.reps);
