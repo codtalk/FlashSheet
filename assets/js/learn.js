@@ -673,7 +673,9 @@
     let quality = 4; // default Good
     try{
       const streak = (progressEntry && progressEntry.streak) ? progressEntry.streak : 0;
-      const confirms = Number(progressEntry?.confirms||0) || 0;
+      const cardConfirms = Number(card?.confirms ?? item?.confirms ?? 0) || 0;
+      const sessionConfirms = Number(progressEntry?.confirms || 0) || 0;
+      const confirms = Math.max(cardConfirms, sessionConfirms);
       if (ok){
         const allowLevelUp = confirms >= LEVEL_UP_CONFIRMATIONS;
         if (!allowLevelUp){
@@ -685,7 +687,7 @@
           if (streak >= 3) quality = 5; // Easy if long streak
           else if (streak === 0) quality = 4; // first correct -> Good
           else quality = 4; // modest boost
-          // Reset confirms after level-up permission
+          // Reset confirms after level-up permission so session + card stay in sync
           try{ progressEntry.confirms = 0; }catch{}
         }
       } else {
@@ -713,7 +715,7 @@
           due: card.due,
         });
       } catch {}
-      // Keep dataset entry in sync so queue/daily counters reflect the new schedule immediately
+      // Keep dataset entry and in-session progress in sync so queue/daily counters reflect the new schedule immediately
       try{
         item.reps = card.reps;
         item.due = card.due;
@@ -723,6 +725,7 @@
         item.lapses = card.lapses;
         item.addedat = card.addedat;
         item.confirms = card.confirms; // đồng bộ số lần đúng xác nhận
+        if (progressEntry){ progressEntry.confirms = card.confirms; }
       }catch{}
     }catch(e){ console.warn('SRS schedule failed', e); }
 
