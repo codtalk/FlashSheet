@@ -14,11 +14,11 @@
     if (t <= 0) return '';
     const delta = t - now;
     if (delta <= 0) return 'Đã đến hạn';
-    const mins = Math.round(delta/60000);
+    const mins = Math.max(1, Math.floor(delta/60000));
     if (mins < 60) return `Còn ${mins}m`;
-    const hours = Math.round(delta/3600000);
+    const hours = Math.max(1, Math.floor(delta/3600000));
     if (hours < 24) return `Còn ${hours}h`;
-    const days = Math.round(delta/86400000);
+    const days = Math.max(1, Math.floor(delta/86400000));
     return `Còn ${days}d`;
   }
 

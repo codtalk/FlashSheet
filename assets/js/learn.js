@@ -1316,7 +1316,8 @@
           lapses: (u.lapses != null ? Number(u.lapses) : null),
           ease: (u.ease != null ? Number(u.ease) : null),
           interval: (u.interval != null ? Number(u.interval) : null),
-          due: (u.due != null ? Number(u.due) : null)
+          due: (u.due != null ? Number(u.due) : null),
+          confirms: (u.confirms != null ? Number(u.confirms) : null)
         });
         joined.push(row);
       });
